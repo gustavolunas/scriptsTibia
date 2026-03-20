@@ -42,7 +42,6 @@ local macros = {
 
 
   "8.ICONS",
-  "_Loader",
   "looting",
 }
 
