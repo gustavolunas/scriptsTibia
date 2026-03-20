@@ -2,23 +2,38 @@ local baseUrl = "https://raw.githubusercontent.com/gustavolunas/-LNS-CUSTOM-/ref
 
 local macros = {
   "MAIN",
-  "COMBO",
-  "HEALING",
-  "CONDITIONS",
-  "SWAP",
-  "FOLLOW",
-  "UTILITARIOS",
-  "TRAVEL",
-  "AUTOSIO",
-  "SWAPEQUIP",
-  "PUSHMAX",
-  "MWSYSTEM",
-  "ICONS",
-  "HUD",
-  "INGAME",
-  "PARTY",
-  "IMBUIMENT",
-  "CONTAINER",
+  "1.COMBO",
+  "1.1.COMBOSETUP",
+  "2.HEALING",
+  "3.AUTOSIO",
+  "4.CONDITIONS",
+  "5.SWAP",
+  "5.1.SWAPEQUIP",
+  "6.UTILITARIOS",
+  "7.HUD",
+  "8.1.TASKTRACKER",
+  
+
+  "BUYMARKET",
+  "cavebot_control_panel",
+
+  "14.INGAME",
+  "9.TRAVEL",
+  "10.FOLLOW",
+  "11.PARTY",
+  "12.PREY",
+  "13.IMBUIMENT",
+  "15.CONTAINERS",
+  
+  "16.WARSCRIPTS1",
+  "17.PUSHMAX",
+  "18.MWSYSTEM",
+  "19.WARSCRIPTS2",
+
+
+  "8.ICONS",
+  "looting",
+  "_Loader",
 }
 
 local RETRY_BASE_MS = 250
