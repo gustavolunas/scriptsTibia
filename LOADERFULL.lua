@@ -1,4 +1,4 @@
-local baseUrl = "https://raw.githubusercontent.com/gustavolunas/-LNS-CUSTOM-/refs/heads/main/"
+local baseUrl = "https://raw.githubusercontent.com/gustavolunas/scriptsTibia/refs/heads/main/"
 
 local macros = {
   "MAIN",
