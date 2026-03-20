@@ -1,3 +1,13 @@
+warning = function() 
+    return  
+end
+warn = function() 
+    return  
+end
+error = function() 
+    return  
+end
+
 local baseUrl = "https://raw.githubusercontent.com/gustavolunas/scriptsTibia/refs/heads/main/"
 
 local macros = {
@@ -32,8 +42,8 @@ local macros = {
 
 
   "8.ICONS",
-  "looting",
   "_Loader",
+  "looting",
 }
 
 local RETRY_BASE_MS = 250
