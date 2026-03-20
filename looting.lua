@@ -1,3 +1,4 @@
+setDefaultTab("Target")
 
 TargetBot.Creature = {}
 TargetBot.Creature.configsCache = {}
