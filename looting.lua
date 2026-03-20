@@ -1,3 +1,519 @@
+
+TargetBot.Creature = {}
+TargetBot.Creature.configsCache = {}
+TargetBot.Creature.cached = 0
+
+TargetBot.Creature.resetConfigs = function()
+  TargetBot.targetList:destroyChildren()
+  TargetBot.Creature.resetConfigsCache()
+end
+
+TargetBot.Creature.resetConfigsCache = function()
+  TargetBot.Creature.configsCache = {}
+  TargetBot.Creature.cached = 0
+end
+
+TargetBot.Creature.addConfig = function(config, focus)
+  if type(config) ~= 'table' or type(config.name) ~= 'string' then
+    return error("Invalid targetbot creature config (missing name)")
+  end
+  TargetBot.Creature.resetConfigsCache()
+
+  if not config.regex then
+    config.regex = ""
+    for part in string.gmatch(config.name, "[^,]+") do
+      if config.regex:len() > 0 then
+        config.regex = config.regex .. "|"
+      end
+      config.regex = config.regex .. "^" .. part:trim():lower():gsub("%*", ".*"):gsub("%?", ".?") .. "$"
+    end
+  end
+
+  local widget = UI.createWidget("TargetBotEntry", TargetBot.targetList)
+  widget:setText(config.name)
+  widget.value = config
+
+  widget.onDoubleClick = function(entry) -- edit on double click
+    schedule(20, function() -- schedule to have correct focus
+      TargetBot.Creature.edit(entry.value, function(newConfig)
+        entry:setText(newConfig.name)
+        entry.value = newConfig
+        TargetBot.Creature.resetConfigsCache()
+        TargetBot.save()
+      end)
+    end)
+  end
+
+  if focus then
+    widget:focus()
+    TargetBot.targetList:ensureChildVisible(widget)
+  end
+  return widget
+end
+
+TargetBot.Creature.getConfigs = function(creature)
+  if not creature then return {} end
+  local name = creature:getName():trim():lower()
+  -- this function may be slow, so it will be using cache
+  if TargetBot.Creature.configsCache[name] then
+    return TargetBot.Creature.configsCache[name]
+  end
+  local configs = {}
+  for _, config in ipairs(TargetBot.targetList:getChildren()) do
+    if regexMatch(name, config.value.regex)[1] then
+      table.insert(configs, config.value)
+    end
+  end
+  if TargetBot.Creature.cached > 1000 then 
+    TargetBot.Creature.resetConfigsCache() -- too big cache size, reset
+  end
+  TargetBot.Creature.configsCache[name] = configs -- add to cache
+  TargetBot.Creature.cached = TargetBot.Creature.cached + 1
+  return configs
+end
+
+TargetBot.Creature.calculateParams = function(creature, path)
+  local configs = TargetBot.Creature.getConfigs(creature)
+  local priority = 0
+  local danger = 0
+  local selectedConfig = nil
+  for _, config in ipairs(configs) do
+    local config_priority = TargetBot.Creature.calculatePriority(creature, config, path)
+    if config_priority > priority then
+      priority = config_priority
+      danger = TargetBot.Creature.calculateDanger(creature, config, path)
+      selectedConfig = config
+    end
+  end
+  return {
+    config = selectedConfig,
+    creature = creature,
+    danger = danger,
+    priority = priority
+  }
+end
+
+TargetBot.Creature.calculateDanger = function(creature, config, path)
+  -- config is based on creature_editor
+  return config.danger
+end
+
+
+local targetBotLure = false
+local targetCount = 0 
+local delayValue = 0
+local lureMax = 0
+local anchorPosition = nil
+local lastCall = now
+local delayFrom = nil
+local dynamicLureDelay = false
+
+function getWalkableTilesCount(position)
+  local count = 0
+
+  for i, tile in pairs(getNearTiles(position)) do
+      if tile:isWalkable() or tile:hasCreature() then
+          count = count + 1
+      end
+  end
+
+  return count
+end
+
+function rePosition(minTiles)
+  minTiles = minTiles or 8
+  if now - lastCall < 500 then return end
+  local pPos = player:getPosition()
+  local tiles = getNearTiles(pPos)
+  local playerTilesCount = getWalkableTilesCount(pPos)
+  local tilesTable = {}
+
+  if playerTilesCount > minTiles then return end
+  for i, tile in ipairs(tiles) do
+      tilesTable[tile] = not tile:hasCreature() and tile:isWalkable() and getWalkableTilesCount(tile:getPosition()) or nil
+  end
+
+  local best = 0
+  local target = nil
+  for k,v in pairs(tilesTable) do
+      if v > best and v > playerTilesCount then
+          best = v
+          target = k:getPosition()
+      end
+  end
+
+  if target then
+      lastCall = now
+      return CaveBot.GoTo(target, 0)
+  end
+end
+
+TargetBot.Creature.attack = function(params, targets, isLooting) -- params {config, creature, danger, priority}
+  if player:isWalking() then
+    lastWalk = now
+  end
+
+  local config = params.config
+  local creature = params.creature
+  
+  if g_game.getAttackingCreature() ~= creature then
+    g_game.attack(creature)
+  end
+
+  if not isLooting then -- walk only when not looting
+    TargetBot.Creature.walk(creature, config, targets)
+  end
+
+  -- attacks
+  local mana = player:getMana()
+  if config.useGroupAttack and config.groupAttackSpell:len() > 1 and mana > config.minManaGroup then
+    local creatures = g_map.getSpectatorsInRange(player:getPosition(), false, config.groupAttackRadius, config.groupAttackRadius)
+    local playersAround = false
+    local monsters = 0
+    for _, creature in ipairs(creatures) do
+      if not creature:isLocalPlayer() and creature:isPlayer() and (not config.groupAttackIgnoreParty or creature:getShield() <= 2) then
+        playersAround = true
+      elseif creature:isMonster() then
+        monsters = monsters + 1
+      end
+    end
+    if monsters >= config.groupAttackTargets and (not playersAround or config.groupAttackIgnorePlayers) then
+      if TargetBot.sayAttackSpell(config.groupAttackSpell, config.groupAttackDelay) then
+        return
+      end
+    end
+  end
+
+  if config.useGroupAttackRune and config.groupAttackRune > 100 then
+    local creatures = g_map.getSpectatorsInRange(creature:getPosition(), false, config.groupRuneAttackRadius, config.groupRuneAttackRadius)
+    local playersAround = false
+    local monsters = 0
+    for _, creature in ipairs(creatures) do
+      if not creature:isLocalPlayer() and creature:isPlayer() and (not config.groupAttackIgnoreParty or creature:getShield() <= 2) then
+        playersAround = true
+      elseif creature:isMonster() then
+        monsters = monsters + 1
+      end
+    end
+    if monsters >= config.groupRuneAttackTargets and (not playersAround or config.groupAttackIgnorePlayers) then
+      if TargetBot.useAttackItem(config.groupAttackRune, 0, creature, config.groupRuneAttackDelay) then
+        return
+      end
+    end
+  end
+  if config.useSpellAttack and config.attackSpell:len() > 1 and mana > config.minMana then
+    if TargetBot.sayAttackSpell(config.attackSpell, config.attackSpellDelay) then
+      return
+    end
+  end
+  if config.useRuneAttack and config.attackRune > 100 then
+    if TargetBot.useAttackItem(config.attackRune, 0, creature, config.attackRuneDelay) then
+      return
+    end
+  end
+end
+
+TargetBot.Creature.walk = function(creature, config, targets)
+  local cpos = creature:getPosition()
+  local pos = player:getPosition()
+  
+  local isTrapped = true
+  local pos = player:getPosition()
+  local dirs = {{-1,1}, {0,1}, {1,1}, {-1, 0}, {1, 0}, {-1, -1}, {0, -1}, {1, -1}}
+  for i=1,#dirs do
+    local tile = g_map.getTile({x=pos.x-dirs[i][1],y=pos.y-dirs[i][2],z=pos.z})
+    if tile and tile:isWalkable(false) then
+      isTrapped = false
+    end
+  end
+
+  -- data for external dynamic lure
+  if config.lureMin and config.lureMax and config.dynamicLure then
+    if config.lureMin >= targets then
+      targetBotLure = true
+    elseif targets >= config.lureMax then
+      targetBotLure = false
+    end
+  end
+  targetCount = targets
+  delayValue = config.lureDelay
+
+  if config.lureMax then
+    lureMax = config.lureMax
+  end
+
+  dynamicLureDelay = config.dynamicLureDelay
+  delayFrom = config.delayFrom
+
+  -- luring
+  if config.closeLure and config.closeLureAmount <= getMonsters(1) then
+    return TargetBot.allowCaveBot(150)
+  end
+  if TargetBot.canLure() and (config.lure or config.lureCavebot or config.dynamicLure) and not (creature:getHealthPercent() < (storage.extras.killUnder or 30)) and not isTrapped then
+    if targetBotLure then
+      anchorPosition = nil
+      return TargetBot.allowCaveBot(150)
+    else
+      if targets < config.lureCount then
+        if config.lureCavebot then
+          anchorPosition = nil
+          return TargetBot.allowCaveBot(150)
+        else
+          local path = findPath(pos, cpos, 5, {ignoreNonPathable=true, precision=2})
+          if path then
+            return TargetBot.walkTo(cpos, 10, {marginMin=5, marginMax=6, ignoreNonPathable=true})
+          end
+        end
+      end
+    end
+  end
+
+  local currentDistance = findPath(pos, cpos, 10, {ignoreCreatures=true, ignoreNonPathable=true, ignoreCost=true})
+  if (not config.chase or #currentDistance == 1) and not config.avoidAttacks and not config.keepDistance and config.rePosition and (creature:getHealthPercent() >= storage.extras.killUnder) then
+    return rePosition(config.rePositionAmount or 6)
+  end
+  if ((storage.extras.killUnder > 1 and (creature:getHealthPercent() < storage.extras.killUnder)) or config.chase) and not config.keepDistance then
+    if #currentDistance > 1 then
+      return TargetBot.walkTo(cpos, 10, {ignoreNonPathable=true, precision=1})
+    end
+  elseif config.keepDistance then
+    if not anchorPosition or distanceFromPlayer(anchorPosition) > config.anchorRange then
+      anchorPosition = pos
+    end
+    if #currentDistance ~= config.keepDistanceRange and #currentDistance ~= config.keepDistanceRange + 1 then
+      if config.anchor and anchorPosition and getDistanceBetween(pos, anchorPosition) <= config.anchorRange*2 then
+        return TargetBot.walkTo(cpos, 10, {ignoreNonPathable=true, marginMin=config.keepDistanceRange, marginMax=config.keepDistanceRange + 1, maxDistanceFrom={anchorPosition, config.anchorRange}})
+      else
+        return TargetBot.walkTo(cpos, 10, {ignoreNonPathable=true, marginMin=config.keepDistanceRange, marginMax=config.keepDistanceRange + 1})
+      end
+    end
+  end
+
+  --target only movement
+  if config.avoidAttacks then
+    local diffx = cpos.x - pos.x
+    local diffy = cpos.y - pos.y
+    local candidates = {}
+    if math.abs(diffx) == 1 and diffy == 0 then
+      candidates = {{x=pos.x, y=pos.y-1, z=pos.z}, {x=pos.x, y=pos.y+1, z=pos.z}}
+    elseif diffx == 0 and math.abs(diffy) == 1 then
+      candidates = {{x=pos.x-1, y=pos.y, z=pos.z}, {x=pos.x+1, y=pos.y, z=pos.z}}
+    end
+    for _, candidate in ipairs(candidates) do
+      local tile = g_map.getTile(candidate)
+      if tile and tile:isWalkable() then
+        return TargetBot.walkTo(candidate, 2, {ignoreNonPathable=true})
+      end
+    end
+  elseif config.faceMonster then
+    local diffx = cpos.x - pos.x
+    local diffy = cpos.y - pos.y
+    local candidates = {}
+    if diffx == 1 and diffy == 1 then
+      candidates = {{x=pos.x+1, y=pos.y, z=pos.z}, {x=pos.x, y=pos.y-1, z=pos.z}}
+    elseif diffx == -1 and diffy == 1 then
+      candidates = {{x=pos.x-1, y=pos.y, z=pos.z}, {x=pos.x, y=pos.y-1, z=pos.z}}
+    elseif diffx == -1 and diffy == -1 then
+      candidates = {{x=pos.x, y=pos.y-1, z=pos.z}, {x=pos.x-1, y=pos.y, z=pos.z}} 
+    elseif diffx == 1 and diffy == -1 then
+      candidates = {{x=pos.x, y=pos.y-1, z=pos.z}, {x=pos.x+1, y=pos.y, z=pos.z}}       
+    else
+      local dir = player:getDirection()
+      if diffx == 1 and dir ~= 1 then turn(1)
+      elseif diffx == -1 and dir ~= 3 then turn(3)
+      elseif diffy == 1 and dir ~= 2 then turn(2)
+      elseif diffy == -1 and dir ~= 0 then turn(0)
+      end
+    end
+    for _, candidate in ipairs(candidates) do
+      local tile = g_map.getTile(candidate)
+      if tile and tile:isWalkable() then
+        return TargetBot.walkTo(candidate, 2, {ignoreNonPathable=true})
+      end
+    end
+  end
+end
+
+onPlayerPositionChange(function(newPos, oldPos)
+  if CaveBot.isOff() then return end
+  if TargetBot.isOff() then return end
+  if not lureMax then return end
+  if storage.TargetBotDelayWhenPlayer then return end
+  if not dynamicLureDelay then return end
+
+  if targetCount < (delayFrom or lureMax/2) or not target() then return end
+  CaveBot.delay(delayValue or 0)
+end)
+
+TargetBot.Creature.edit = function(config, callback) -- callback = function(newConfig)
+  config = config or {}
+
+  local editor = UI.createWindow('TargetBotCreatureEditorWindow')
+  local values = {} -- (key, function returning value of key)
+
+  editor.name:setText(config.name or "")
+  table.insert(values, {"name", function() return editor.name:getText() end})
+
+  local addScrollBar = function(id, title, min, max, defaultValue)
+    local widget = UI.createWidget('TargetBotCreatureEditorScrollBar', editor.content.left)
+    widget.scroll.onValueChange = function(scroll, value)
+      widget.text:setText(title .. ": " .. value)
+    end
+    widget.scroll:setRange(min, max)
+    if max-min > 1000 then
+      widget.scroll:setStep(100)
+    elseif max-min > 100 then
+      widget.scroll:setStep(10)
+    end
+    widget.scroll:setValue(config[id] or defaultValue)
+    widget.scroll.onValueChange(widget.scroll, widget.scroll:getValue())
+    table.insert(values, {id, function() return widget.scroll:getValue() end})
+  end
+
+  local addTextEdit = function(id, title, defaultValue)
+    local widget = UI.createWidget('TargetBotCreatureEditorTextEdit', editor.content.right)
+    widget.text:setText(title)
+    widget.textEdit:setText(config[id] or defaultValue or "")
+    table.insert(values, {id, function() return widget.textEdit:getText() end})
+  end
+
+  local addCheckBox = function(id, title, defaultValue)
+    local widget = UI.createWidget('TargetBotCreatureEditorCheckBox', editor.content.right)
+    widget.onClick = function()
+      widget:setOn(not widget:isOn())
+    end
+    widget:setText(title)
+    if config[id] == nil then
+      widget:setOn(defaultValue)
+    else
+      widget:setOn(config[id])
+    end
+    table.insert(values, {id, function() return widget:isOn() end})
+  end
+
+  local addItem = function(id, title, defaultItem)
+    local widget = UI.createWidget('TargetBotCreatureEditorItem', editor.content.right)
+    widget.text:setText(title)
+    widget.item:setItemId(config[id] or defaultItem)
+    table.insert(values, {id, function() return widget.item:getItemId() end})
+  end
+
+  editor.cancel.onClick = function()
+    editor:destroy()
+  end
+  editor.onEscape = editor.cancel.onClick
+
+  editor.ok.onClick = function()
+    local newConfig = {}
+    for _, value in ipairs(values) do
+      newConfig[value[1]] = value[2]()
+    end
+    if newConfig.name:len() < 1 then return end
+
+    newConfig.regex = ""
+    for part in string.gmatch(newConfig.name, "[^,]+") do
+      if newConfig.regex:len() > 0 then
+        newConfig.regex = newConfig.regex .. "|"
+      end
+      newConfig.regex = newConfig.regex .. "^" .. part:trim():lower():gsub("%*", ".*"):gsub("%?", ".?") .. "$"    
+    end
+
+    editor:destroy()
+    callback(newConfig)
+  end
+
+  -- values
+  addScrollBar("priority", "Priority", 0, 10, 1)
+  addScrollBar("danger", "Danger", 0, 10, 1)
+  addScrollBar("maxDistance", "Max distance", 1, 10, 10)
+  addScrollBar("keepDistanceRange", "Keep distance", 1, 5, 1)
+  addScrollBar("anchorRange", "Anchoring Range", 1, 10, 3)
+  addScrollBar("lureCount", "Classic Lure", 0, 5, 1)
+  addScrollBar("lureMin", "Dynamic lure min", 0, 29, 1)
+  addScrollBar("lureMax", "Dynamic lure max", 1, 30, 3)
+  addScrollBar("lureDelay", "Dynamic lure delay", 100, 1000, 250)
+  addScrollBar("delayFrom", "Start delay when monsters", 1, 29, 2)
+  addScrollBar("rePositionAmount", "Min tiles to rePosition", 0, 7, 5)
+  addScrollBar("closeLureAmount", "Close Pull Until", 0, 8, 3)
+
+  addCheckBox("chase", "Chase", true)
+  addCheckBox("keepDistance", "Keep Distance", false)
+  addCheckBox("anchor", "Anchoring", false)
+  addCheckBox("dontLoot", "Don't loot", false)
+  addCheckBox("lure", "Lure", false)
+  addCheckBox("lureCavebot", "Lure using cavebot", false)
+  addCheckBox("faceMonster", "Face monsters", false)
+  addCheckBox("avoidAttacks", "Avoid wave attacks", false)
+  addCheckBox("dynamicLure", "Dynamic lure", false)
+  addCheckBox("dynamicLureDelay", "Dynamic lure delay", false)
+  addCheckBox("diamondArrows", "D-Arrows priority", false)
+  addCheckBox("rePosition", "rePosition to better tile", false)
+  addCheckBox("closeLure", "Close Pulling Monsters", false)
+  addCheckBox("rpSafe", "RP PVP SAFE - (DA)", false)
+end
+
+TargetBot.Creature.calculatePriority = function(creature, config, path)
+  -- config is based on creature_editor
+  local priority = 0
+  local currentTarget = g_game.getAttackingCreature()
+
+  -- extra priority if it's current target
+  if currentTarget == creature then
+    priority = priority + 1
+  end
+
+  -- check if distance is ok
+  if #path > config.maxDistance then
+    if config.rpSafe then
+      if currentTarget == creature then
+        g_game.cancelAttackAndFollow()  -- if not, stop attack (pvp safe)
+      end
+    end
+    return priority
+  end
+
+  -- add config priority
+  priority = priority + config.priority
+  
+  -- extra priority for close distance
+  local path_length = #path
+  if path_length == 1 then
+    priority = priority + 10
+  elseif path_length <= 3 then
+    priority = priority + 5
+  end
+
+  -- extra priority for paladin diamond arrows
+  if config.diamondArrows then
+    local mobCount = getCreaturesInArea(creature:getPosition(), diamondArrowArea, 2)
+    priority = priority + (mobCount * 4)
+
+    if config.rpSafe then
+      if getCreaturesInArea(creature:getPosition(), largeRuneArea, 3) > 0 then
+        if currentTarget == creature then
+          g_game.cancelAttackAndFollow()
+        end
+        return 0 -- pvp safe
+      end
+    end
+  end
+
+  -- extra priority for low health
+  if config.chase and creature:getHealthPercent() < 30 then
+    priority = priority + 5
+  elseif creature:getHealthPercent() < 20 then
+    priority = priority + 2.5
+  elseif creature:getHealthPercent() < 40 then
+    priority = priority + 1.5
+  elseif creature:getHealthPercent() < 60 then
+    priority = priority + 0.5
+  elseif creature:getHealthPercent() < 80 then
+    priority = priority + 0.2
+  end
+
+  return priority
+end
+
 g_ui.loadUIFromString([[
 TargetBotLootingPanel < Panel
   layout:
@@ -649,3 +1165,361 @@ onCreatureDisappear(function(creature)
     container:setMarked('#000088')
   end)
 end)
+
+local dest
+local maxDist
+local params
+
+TargetBot.walkTo = function(_dest, _maxDist, _params)
+  dest = _dest
+  maxDist = _maxDist
+  params = _params
+end
+
+-- called every 100ms if targeting or looting is active
+TargetBot.walk = function()
+  if not dest then return end
+  if player:isWalking() then return end
+  local pos = player:getPosition()
+  if pos.z ~= dest.z then return end
+  local dist = math.max(math.abs(pos.x-dest.x), math.abs(pos.y-dest.y))
+  if params.precision and params.precision >= dist then return end
+  if params.marginMin and params.marginMax then
+    if dist >= params.marginMin and dist <= params.marginMax then 
+      return
+    end
+  end
+  local path = getPath(pos, dest, maxDist, params)
+  if path then
+    walk(path[1])
+  end
+end
+
+local targetbotMacro = nil
+local config = nil
+local lastAction = 0
+local cavebotAllowance = 0
+local lureEnabled = true
+local dangerValue = 0
+local looterStatus = ""
+
+-- ui
+local configWidget = UI.Config()
+local ui = UI.createWidget("TargetBotPanel")
+
+ui.list = ui.listPanel.list -- shortcut
+TargetBot.targetList = ui.list
+TargetBot.Looting.setup()
+
+ui.status.left:setText("Status:")
+ui.status.right:setText("Off")
+ui.target.left:setText("Target:")
+ui.target.right:setText("-")
+ui.config.left:setText("Config:")
+ui.config.right:setText("-")
+ui.danger.left:setText("Danger:")
+ui.danger.right:setText("0")
+
+ui.editor.debug.onClick = function()
+  local on = ui.editor.debug:isOn()
+  ui.editor.debug:setOn(not on)
+  if on then
+    for _, spec in ipairs(getSpectators()) do
+      spec:clearText()
+    end
+  end
+end
+
+local oldTibia = g_game.getClientVersion() < 960
+
+-- main loop, controlled by config
+targetbotMacro = macro(100, function()
+  local pos = player:getPosition()
+  local specs = g_map.getSpectatorsInRange(pos, false, 6, 6) -- 12x12 area
+  local creatures = 0
+  for i, spec in ipairs(specs) do
+    if spec:isMonster() then
+      creatures = creatures + 1
+    end
+  end
+  if creatures > 10 then -- if there are too many monsters around, limit area
+    creatures = g_map.getSpectatorsInRange(pos, false, 3, 3) -- 6x6 area
+  else
+    creatures = specs
+  end
+  local highestPriority = 0
+  local dangerLevel = 0
+  local targets = 0
+  local highestPriorityParams = nil
+  for i, creature in ipairs(creatures) do
+    local hppc = creature:getHealthPercent()
+    if hppc and hppc > 0 then
+      local path = findPath(player:getPosition(), creature:getPosition(), 7, {ignoreLastCreature=true, ignoreNonPathable=true, ignoreCost=true, ignoreCreatures=true})
+      if creature:isMonster() and (oldTibia or creature:getType() < 3) and path then
+        local params = TargetBot.Creature.calculateParams(creature, path) -- return {craeture, config, danger, priority}
+        dangerLevel = dangerLevel + params.danger
+        if params.priority > 0 then
+          targets = targets + 1
+          if params.priority > highestPriority then
+            highestPriority = params.priority
+            highestPriorityParams = params
+          end
+          if ui.editor.debug:isOn() then
+            creature:setText(params.config.name .. "\n" .. params.priority)
+          end
+        end
+      end
+    end
+  end
+
+  -- reset walking
+  TargetBot.walkTo(nil)
+
+  -- looting
+  local looting = TargetBot.Looting.process(targets, dangerLevel)
+  local lootingStatus = TargetBot.Looting.getStatus()
+  looterStatus = TargetBot.Looting.getStatus()
+  dangerValue = dangerLevel
+
+  ui.danger.right:setText(dangerLevel)
+  if highestPriorityParams and not isInPz() then
+    ui.target.right:setText(highestPriorityParams.creature:getName())
+    ui.config.right:setText(highestPriorityParams.config.name)
+    TargetBot.Creature.attack(highestPriorityParams, targets, looting)    
+    if lootingStatus:len() > 0 then
+      TargetBot.setStatus("Attack & " .. lootingStatus)
+    elseif cavebotAllowance > now then
+      TargetBot.setStatus("Luring using CaveBot")
+    else
+      TargetBot.setStatus("Attacking")
+      if not lureEnabled then
+        TargetBot.setStatus("Attacking (luring off)")      
+      end
+    end
+    TargetBot.walk()
+    lastAction = now
+    return
+  end
+
+  ui.target.right:setText("-")
+  ui.config.right:setText("-")
+  if looting then
+    TargetBot.walk()
+    lastAction = now
+  end
+  if lootingStatus:len() > 0 then
+    TargetBot.setStatus(lootingStatus)
+  else
+    TargetBot.setStatus("Waiting")
+  end
+end)
+
+-- config, its callback is called immediately, data can be nil
+config = Config.setup("targetbot_configs", configWidget, "json", function(name, enabled, data)
+  if not data then
+    ui.status.right:setText("Off")
+    return targetbotMacro.setOff() 
+  end
+  TargetBot.Creature.resetConfigs()
+  for _, value in ipairs(data["targeting"] or {}) do
+    TargetBot.Creature.addConfig(value)
+  end
+  TargetBot.Looting.update(data["looting"] or {})
+
+  -- add configs
+  if enabled then
+    ui.status.right:setText("On")
+  else
+    ui.status.right:setText("Off")
+  end
+
+  targetbotMacro.setOn(enabled)
+  targetbotMacro.delay = nil
+  lureEnabled = true
+end)
+
+-- setup ui
+ui.editor.buttons.add.onClick = function()
+  TargetBot.Creature.edit(nil, function(newConfig)
+    TargetBot.Creature.addConfig(newConfig, true)
+    TargetBot.save()
+  end)
+end
+
+ui.editor.buttons.edit.onClick = function()
+  local entry = ui.list:getFocusedChild()
+  if not entry then return end
+  TargetBot.Creature.edit(entry.value, function(newConfig)
+    entry:setText(newConfig.name)
+    entry.value = newConfig
+    TargetBot.Creature.resetConfigsCache()
+    TargetBot.save()
+  end)
+end
+
+ui.editor.buttons.remove.onClick = function()
+  local entry = ui.list:getFocusedChild()
+  if not entry then return end
+  entry:destroy()
+  TargetBot.Creature.resetConfigsCache()
+  TargetBot.save()
+end
+
+-- public function, you can use them in your scripts
+TargetBot.isActive = function() -- return true if attacking or looting takes place
+  return lastAction + 300 > now
+end
+
+TargetBot.isCaveBotActionAllowed = function()
+  return cavebotAllowance > now
+end
+
+TargetBot.setStatus = function(text)
+  return ui.status.right:setText(text)
+end
+
+TargetBot.getStatus = function()
+  return ui.status.right:getText()
+end
+
+TargetBot.isOn = function()
+  return config.isOn()
+end
+
+TargetBot.isOff = function()
+  return config.isOff()
+end
+
+TargetBot.setOn = function(val)
+  if val == false then  
+    return TargetBot.setOff(true)
+  end
+  config.setOn()
+end
+
+TargetBot.setOff = function(val)
+  if val == false then  
+    return TargetBot.setOn(true)
+  end
+  config.setOff()
+end
+
+TargetBot.getCurrentProfile = function()
+  return storage._configs.targetbot_configs.selected
+end
+
+local botConfigName = modules.game_bot.contentsPanel.config:getCurrentOption().text
+TargetBot.setCurrentProfile = function(name)
+  if not g_resources.fileExists("/bot/"..botConfigName.."/targetbot_configs/"..name..".json") then
+    return warn("there is no targetbot profile with that name!")
+  end
+  TargetBot.setOff()
+  storage._configs.targetbot_configs.selected = name
+  TargetBot.setOn()
+end
+
+TargetBot.delay = function(value)
+  targetbotMacro.delay = now + value
+end
+
+TargetBot.save = function()
+  local data = {targeting={}, looting={}}
+  for _, entry in ipairs(ui.list:getChildren()) do
+    table.insert(data.targeting, entry.value)
+  end
+  TargetBot.Looting.save(data.looting)
+  config.save(data)
+end
+
+TargetBot.allowCaveBot = function(time)
+  cavebotAllowance = now + time
+end
+
+TargetBot.disableLuring = function()
+  lureEnabled = false
+end
+
+TargetBot.enableLuring = function()
+  lureEnabled = true
+end
+
+TargetBot.Danger = function()
+  return dangerValue
+end
+
+TargetBot.lootStatus = function()
+  return looterStatus
+end
+
+
+-- attacks
+local lastSpell = 0
+local lastAttackSpell = 0
+
+TargetBot.saySpell = function(text, delay)
+  if type(text) ~= 'string' or text:len() < 1 then return end
+  if not delay then delay = 500 end
+  if g_game.getProtocolVersion() < 1090 then
+    lastAttackSpell = now -- pause attack spells, healing spells are more important
+  end
+  if lastSpell + delay < now then
+    say(text)
+    lastSpell = now
+    return true
+  end
+  return false
+end
+
+TargetBot.sayAttackSpell = function(text, delay)
+  if type(text) ~= 'string' or text:len() < 1 then return end
+  if not delay then delay = 2000 end
+  if lastAttackSpell + delay < now then
+    say(text)
+    lastAttackSpell = now
+    return true
+  end
+  return false
+end
+
+local lastItemUse = 0
+local lastRuneAttack = 0
+
+TargetBot.useItem = function(item, subType, target, delay)
+  if not delay then delay = 200 end
+  if lastItemUse + delay < now then
+    local thing = g_things.getThingType(item)
+    if not thing or not thing:isFluidContainer() then
+      subType = g_game.getClientVersion() >= 860 and 0 or 1
+    end
+    if g_game.getClientVersion() < 780 then
+      local tmpItem = g_game.findPlayerItem(item, subType)
+      if not tmpItem then return end
+      g_game.useWith(tmpItem, target, subType) -- using item from bp
+    else
+      g_game.useInventoryItemWith(item, target, subType) -- hotkey
+    end
+    lastItemUse = now
+  end
+end
+
+TargetBot.useAttackItem = function(item, subType, target, delay)
+  if not delay then delay = 2000 end
+  if lastRuneAttack + delay < now then
+    local thing = g_things.getThingType(item)
+    if not thing or not thing:isFluidContainer() then
+      subType = g_game.getClientVersion() >= 860 and 0 or 1
+    end
+    if g_game.getClientVersion() < 780 then
+      local tmpItem = g_game.findPlayerItem(item, subType)
+      if not tmpItem then return end
+      g_game.useWith(tmpItem, target, subType) -- using item from bp  
+    else
+      g_game.useInventoryItemWith(item, target, subType) -- hotkey
+    end
+    lastRuneAttack = now
+  end
+end
+
+TargetBot.canLure = function()
+  return lureEnabled
+end
