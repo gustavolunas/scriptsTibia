@@ -1,3 +1,5 @@
+setDefaultTab("LNS")
+
 local switchCombo = "comboButton"
 
 if not storage[switchCombo] then
