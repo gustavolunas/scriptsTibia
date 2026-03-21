@@ -12,6 +12,7 @@ local baseUrl = "https://raw.githubusercontent.com/gustavolunas/scriptsTibia/ref
 
 local macros = {
   "MAIN",
+  "looting",
   "1.COMBO",
   "1.1.COMBOSETUP",
   "2.HEALING",
@@ -42,7 +43,6 @@ local macros = {
 
 
   "8.ICONS",
-  "looting",
 }
 
 local RETRY_BASE_MS = 250
