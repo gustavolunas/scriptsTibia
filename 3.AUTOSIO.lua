@@ -1,3 +1,5 @@
+setDefaultTab("LNS")
+
 switchSio = "sioButton"
 if not storage[switchSio] then storage[switchSio] = { enabled = false } end
 
