@@ -1,3 +1,5 @@
+setDefaultTab("LNS")
+
 switchConditions = "conditionsButton"
 local panelName = "conditionsInterface"
 
