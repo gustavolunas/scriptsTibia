@@ -1,3 +1,5 @@
+setDefaultTab("LNS")
+
 local switchHealing = "healingButton"
 
 if not storage[switchHealing] then
