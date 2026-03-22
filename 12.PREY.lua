@@ -503,6 +503,7 @@ st.slotSelected = st.slotSelected or { [1] = false, [2] = false, [3] = false }
 
 local manualRun = false
 local manualAutoHide = false
+local autoHidePending = false
 
 local function slotKey(slotIndex)
   return (tonumber(slotIndex) or 0) + 1 -- 0..2 -> 1..3
@@ -1027,7 +1028,13 @@ local function stopAll()
   cycleDone = true
   doneKey = buildCycleKey()
 
-  if manualRun == true and manualAutoHide == true then
+  local shouldHide = autoHidePending or (manualRun == true and manualAutoHide == true)
+
+  autoHidePending = false
+  manualRun = false
+  manualAutoHide = false
+
+  if shouldHide then
     local tok = runToken
     later(80, function()
       if tok ~= runToken then return end
@@ -1036,9 +1043,6 @@ local function stopAll()
       end
     end)
   end
-
-  manualRun = false
-  manualAutoHide = false
 end
 
 local function nextEnabledSlot(fromSlot)
@@ -1179,6 +1183,8 @@ local function startSequence()
   if running then return end
   if not mainEnabled() then return end
 
+  autoHidePending = (manualRun ~= true)
+
   local key = buildCycleKey()
   if cycleDone and doneKey == key then
     return
@@ -1269,10 +1275,6 @@ macro(250, function()
   end
 
   if (not running) and cycleDone and doneKey == key then
-    if modules and modules.game_prey then
-      modules.game_prey:hide()
-    end
-
     if nextRecheckAt == 0 then
       nextRecheckAt = now + RECHECK_MS
     end
