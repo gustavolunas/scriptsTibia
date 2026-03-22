@@ -210,7 +210,6 @@ storage.utilityToggles = storage.utilityToggles or {}
 -- referência dos BotSwitch criados no painel
 utilSwitches = utilSwitches or {} -- [key] = widget
 
--- Setter único (fonte da verdade): painel + ícone
 function setUtilityToggle(key, state)
   key = tostring(key or "")
   if key == "" then return end
@@ -223,9 +222,22 @@ function setUtilityToggle(key, state)
     w:setOn(state)
   end
 
+  local cfgName = getMyConfigNameSafe()
+  local iconDb = storage.lnsIconsDB
+    and storage.lnsIconsDB[cfgName]
+
+  local iconId = utilIconIdFromKey(key)
+  local iconKey = iconId and ("show_" .. iconId) or nil
+
+  local allowIconUpdate = iconDb
+    and iconDb.iconConfig
+    and iconKey
+    and iconDb.iconConfig[iconKey] == true
+
   if LnsUtilIcons and type(LnsUtilIcons.onToggleChanged) == "function" then
     LnsUtilIcons.onToggleChanged(key, state)
   end
+  
 end
 
 -- =========================
