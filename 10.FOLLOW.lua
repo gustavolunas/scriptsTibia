@@ -77,9 +77,9 @@ settings = loadSettings()
 settings.follow = settings.follow or {}
 settings.follow.ropeID = tostring(settings.follow.ropeID or "3003")
 settings.follow.ropeIDS = normalizeContainerItems(settings.follow.ropeIDS or {386})
-settings.follow.useIDS = normalizeContainerItems(settings.follow.useIDS or {435})
+settings.follow.useIDS = normalizeContainerItems(settings.follow.useIDS or {1948, 435, 9116, 5542, 20475, 17230, 48493, 48494, 1968, 12023, 20474})
 settings.follow.stairIDS = normalizeContainerItems(settings.follow.stairIDS or {484, 17394, 1977, 414})
-settings.follow.buracoIDS = normalizeContainerItems(settings.follow.buracoIDS or {1959})
+settings.follow.buracoIDS = normalizeContainerItems(settings.follow.buracoIDS or {1959, 1949, 1080, 595, 594, 7515, 7516, 868, 7522, 867, 874})
 saveSettings(settings)
 
 if not storage[scriptsPanelName] then
@@ -106,9 +106,9 @@ storage[scriptsPanelName].switches = storage[scriptsPanelName].switches or {}
 
 storage[scriptsPanelName].texts.ropeID = tostring(settings.follow.ropeID or "3003")
 storage[scriptsPanelName].ropeIDS = settings.follow.ropeIDS or {386}
-storage[scriptsPanelName].useIDS = settings.follow.useIDS or {435}
+storage[scriptsPanelName].useIDS = settings.follow.useIDS or {1948, 435, 9116, 5542, 20475, 17230, 48493, 48494, 1968, 12023, 20474}
 storage[scriptsPanelName].stairIDS = settings.follow.stairIDS or {484, 17394, 1977, 414}
-storage[scriptsPanelName].buracoIDS = settings.follow.buracoIDS or {1959}
+storage[scriptsPanelName].buracoIDS = settings.follow.buracoIDS or {1959, 1949, 1080, 595, 594, 7515, 7516, 868, 7522, 867, 874}
 storage[scriptsPanelName].doorsIDS = storage[scriptsPanelName].doorsIDS or {}
 
 if storage[scriptsPanelName].checkboxes then
@@ -1090,6 +1090,7 @@ function followLeader()
 end
 
 onMissle(function(missle)
+  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   local src = missle:getSource()
   if src.z ~= posz() then return end
   
@@ -1120,6 +1121,7 @@ end)
 local fecharChannel = 0
 
 macro(1000, function()
+  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   if storage[scriptsPanelName].switches.abrirChatParty ~= true then return end
   if not (player:isPartyMember() or player:getShield() > 2 or player:isPartyLeader()) then return end
 
@@ -1178,6 +1180,7 @@ local function decodeTargetId(text)
 end
 
 macro(500, function()
+  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   if storage[scriptsPanelName].switches.souLider ~= true then return end
   if not (player:isPartyMember() or player:isPartyLeader() or player:getShield() > 2) then return end
 
@@ -1194,6 +1197,7 @@ macro(500, function()
 end)
 
 onTalk(function(name, level, mode, text, channelId, pos)
+  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   if storage[scriptsPanelName].switches.attackCheck ~= true then return end
   if channelId ~= 1 then return end
 
