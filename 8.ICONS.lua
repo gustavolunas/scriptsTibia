@@ -1257,15 +1257,24 @@ local function safeHide(w) if w and w:isVisible() then w:hide() end end
 
 applyIconsVisibility = function()
   if db.enabled ~= true then
-    for _, it in ipairs(ICON_LIST) do safeHide(icons[it.id]) end
+    for _, it in ipairs(ICON_LIST) do
+      safeHide(icons[it.id])
+    end
     return
   end
 
   for _, it in ipairs(ICON_LIST) do
+    local icon = icons[it.id]
+
     if db.iconConfig[it.key] == true then
-      safeShow(icons[it.id])
+      safeShow(icon)
+
+      if icon and icon.status then
+        icon.status:show()
+        icon.status:setOn(db.status[it.id] == true)
+      end
     else
-      safeHide(icons[it.id])
+      safeHide(icon)
     end
   end
 end
@@ -1939,21 +1948,6 @@ function LnsUtilIcons.onToggleChanged(toggleKey, state)
   if icon.status then
     icon.status:show()
     icon.status:setOn(state)
-  end
-
-  if state then
-    db.enabled = true
-    if iconButton and iconButton.title and iconButton.title.setOn then
-      iconButton.title:setOn(true)
-    end
-
-    local showKey = "show_" .. iconId
-    db.iconConfig[showKey] = true
-
-    if rows and rows[iconId] and rows[iconId].check and rows[iconId].check.setOn then
-      rows[iconId].check:setOn(true)
-    end
-    applyIconsVisibility()
   end
 end
 
