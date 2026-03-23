@@ -77,9 +77,9 @@ settings = loadSettings()
 settings.follow = settings.follow or {}
 settings.follow.ropeID = tostring(settings.follow.ropeID or "3003")
 settings.follow.ropeIDS = normalizeContainerItems(settings.follow.ropeIDS or {386})
-settings.follow.useIDS = normalizeContainerItems(settings.follow.useIDS or {1948, 435, 9116, 5542, 20475, 17230, 48493, 48494, 1968, 12023, 20474})
+settings.follow.useIDS = normalizeContainerItems(settings.follow.useIDS or {435})
 settings.follow.stairIDS = normalizeContainerItems(settings.follow.stairIDS or {484, 17394, 1977, 414})
-settings.follow.buracoIDS = normalizeContainerItems(settings.follow.buracoIDS or {1959, 1949, 1080, 595, 594, 7515, 7516, 868, 7522, 867, 874})
+settings.follow.buracoIDS = normalizeContainerItems(settings.follow.buracoIDS or {1959})
 saveSettings(settings)
 
 if not storage[scriptsPanelName] then
@@ -106,9 +106,9 @@ storage[scriptsPanelName].switches = storage[scriptsPanelName].switches or {}
 
 storage[scriptsPanelName].texts.ropeID = tostring(settings.follow.ropeID or "3003")
 storage[scriptsPanelName].ropeIDS = settings.follow.ropeIDS or {386}
-storage[scriptsPanelName].useIDS = settings.follow.useIDS or {1948, 435, 9116, 5542, 20475, 17230, 48493, 48494, 1968, 12023, 20474}
+storage[scriptsPanelName].useIDS = settings.follow.useIDS or {435}
 storage[scriptsPanelName].stairIDS = settings.follow.stairIDS or {484, 17394, 1977, 414}
-storage[scriptsPanelName].buracoIDS = settings.follow.buracoIDS or {1959, 1949, 1080, 595, 594, 7515, 7516, 868, 7522, 867, 874}
+storage[scriptsPanelName].buracoIDS = settings.follow.buracoIDS or {1959}
 storage[scriptsPanelName].doorsIDS = storage[scriptsPanelName].doorsIDS or {}
 
 if storage[scriptsPanelName].checkboxes then
@@ -131,22 +131,21 @@ end
 
 followButton = setupUI([[
 Panel
-  height: 18
+  height: 17
   
   BotSwitch
     id: title
     anchors.top: parent.top
     anchors.left: parent.left
-    anchors.right: parent.right
     text-align: center
-    height: 18
-    text: FOLLOW
+    width: 110
+    text: Follow
     font: verdana-9px
     color: white
     image-source: /images/ui/button_rounded
     $on:
-      color: #32CD32
-      image-color: #3CB371
+      color: green
+      image-color: green
     $!on:
       image-color: gray
       color: white
@@ -157,8 +156,8 @@ Panel
     anchors.left: prev.right
     anchors.right: parent.right
     margin-left: 0
-    height: 18
-    text: CONFIG
+    height: 17
+    text: Config
     font: verdana-9px
     image-color: #363636
     image-source: /images/ui/button_rounded
@@ -607,29 +606,6 @@ followButton.settings.onClick = function()
   navPanel:show()
 end
 
-function buttonsFollowPcMobile()
-  if modules._G.g_app.isMobile() then
-    followButton.settings:show()
-    followButton.title:setMarginRight(55)
-  else
-    followButton.settings:hide()
-    followButton.title:setMarginRight(0)
-  end
-end
-buttonsFollowPcMobile()
-
-followButton.title.onMouseRelease = function(widget, mousePos, mouseButton)
-  if mouseButton == 2 then
-    if not navPanel:isVisible() then
-      navPanel:show()
-      navPanel:raise();
-      navPanel:focus();
-    else
-      navPanel:hide()
-    end
-  end
-end
-
 navPanel.closePanel.onClick = function()
   navPanel:hide()
 end
@@ -957,7 +933,7 @@ macro(200, function()
 
     if c and not g_game.isFollowing() then
         g_game.follow(c)
-    elseif c and g_game.isFollowing() and getDistanceBetween(pos(), c:getPosition()) > 1 then
+    elseif c and g_game.isFollowing() and getDistanceBetween(pos(), c:getPosition()) > 2 then
         g_game.cancelFollow()
         g_game.follow(c)
     end
@@ -1038,7 +1014,7 @@ macro(200, function()
             handleUsing()
             handleDoors()
         elseif distance > 2 then
-            if getStandTime() > 300 then
+            if getStandTime() > 100 then
                 autoWalk(lpos, 200, parameters)
             end
         end
@@ -1090,7 +1066,6 @@ function followLeader()
 end
 
 onMissle(function(missle)
-  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   local src = missle:getSource()
   if src.z ~= posz() then return end
   
@@ -1121,7 +1096,6 @@ end)
 local fecharChannel = 0
 
 macro(1000, function()
-  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   if storage[scriptsPanelName].switches.abrirChatParty ~= true then return end
   if not (player:isPartyMember() or player:getShield() > 2 or player:isPartyLeader()) then return end
 
@@ -1180,7 +1154,6 @@ local function decodeTargetId(text)
 end
 
 macro(500, function()
-  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   if storage[scriptsPanelName].switches.souLider ~= true then return end
   if not (player:isPartyMember() or player:isPartyLeader() or player:getShield() > 2) then return end
 
@@ -1197,7 +1170,6 @@ macro(500, function()
 end)
 
 onTalk(function(name, level, mode, text, channelId, pos)
-  if not storage[switchFollow] or storage[switchFollow].enabled ~= true then return end
   if storage[scriptsPanelName].switches.attackCheck ~= true then return end
   if channelId ~= 1 then return end
 
