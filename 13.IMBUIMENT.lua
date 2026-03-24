@@ -740,7 +740,7 @@ local function destroyImbuingPanel()
   local knownIds = { "imbuingWindow", "imbueWindow", "ImbuingWindow", "imbueItemWindow" }
   for i = 1, #knownIds do
     local w = root:recursiveGetChildById(knownIds[i])
-    if w and not w:isVisible() then
+    if w and w:isVisible() then
       w:hide()
       return true
     end
