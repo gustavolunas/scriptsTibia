@@ -951,6 +951,11 @@ local exetaLootDelay = 1000
 local nextExeta = 0
 onCreatureDisappear(function(creature)
   if not storage[switchConditions] or not storage[switchConditions].enabled then return end
+
+  local cfg = storage[panelName]
+  if not cfg or not cfg.switches then return end
+  if not cfg.switches["exetaLoot"] then return end
+    
   if nextExeta > now  then return end
   if isInPz() then return end
   if not creature:isMonster() then return end
