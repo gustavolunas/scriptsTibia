@@ -1,4 +1,5 @@
 setDefaultTab("Target")
+warn("target atualizado")
 
 TargetBot.Creature = {}
 TargetBot.Creature.configsCache = {}
