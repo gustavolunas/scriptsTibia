@@ -1618,7 +1618,7 @@ local function getCachedTarget()
     return nil, nil
 end
 
-macro(100, function()
+macro(100, "Travar Target", function()
     if not lockEnabled then
         clearLockTarget()
         return
