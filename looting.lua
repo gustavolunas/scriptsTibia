@@ -1554,7 +1554,7 @@ local function isLockTargetValid(creature)
     return false
   end
 
-  if getDistanceBetween(me, cpos) > 8 then
+  if getDistanceBetween(me, cpos) > 4 then
     return false
   end
 
