@@ -255,7 +255,6 @@ local function loadLootItems()
     safeRead("loot_items.lua")
 
   if not content then
-    warn("[Market] nao achei loot_items.lua")
     return {}
   end
 
@@ -707,7 +706,7 @@ if addConfirm then
     local maxPrice = clamp(addMaxPrice and addMaxPrice:getValue() or 1, 1, 1000000000)
 
     if itemId <= 0 then
-      return warn("[Market] selecione um item.")
+      return
     end
 
     local resolvedName = getItemDisplayName(itemId)
@@ -1182,6 +1181,7 @@ local function bestDepot(range)
   if not p then return nil end
 
   local best
+  local fallbackCurrent
   local offs = {{0,1},{0,-1},{1,0},{-1,0},{1,1},{-1,1},{1,-1},{-1,-1}}
 
   for x = -range, range do
@@ -1190,20 +1190,32 @@ local function bestDepot(range)
       local tile = g_map.getTile(dp)
 
       if tile and DEPOT_IDS[topId(tile)] then
+        local foundStand = false
+
         for i = 1, #offs do
           local sp = {x = dp.x + offs[i][1], y = dp.y + offs[i][2], z = dp.z}
           if canStand(sp) then
+            foundStand = true
             local d = mapDist(p, sp)
             if not best or d < best.d then
               best = { d = d, stand = sp, depot = dp }
             end
           end
         end
+
+        -- fallback especial:
+        -- se eu já estou colado no depot, aceita usar da posição atual
+        if not foundStand and mapDist(p, dp) <= 1 then
+          local d = mapDist(p, dp)
+          if not fallbackCurrent or d < fallbackCurrent.d then
+            fallbackCurrent = { d = d, stand = p, depot = dp }
+          end
+        end
       end
     end
   end
 
-  return best
+  return best or fallbackCurrent
 end
 
 local function useDepotAt(pos)
@@ -1425,7 +1437,6 @@ autoBuyStep = function()
   if autoBuy.step == "go_depot" then
     local found = bestDepot(7)
     if not found then
-      warn("[DEPOT] nenhum depot com spot valido encontrado")
       stopAutoBuy()
       return
     end
@@ -1434,19 +1445,18 @@ autoBuyStep = function()
     autoBuy.depotPos = found.depot
     autoBuy.depotTries = 0
     autoBuy.step = "walking_depot"
-    warn(string.format("[DEPOT] indo para (%d,%d,%d)", found.stand.x, found.stand.y, found.stand.z))
     scheduleAutoBuy(50)
     return
   end
 
   if autoBuy.step == "walking_depot" then
     local myPos = player:getPosition()
-    if not myPos or not autoBuy.depotTarget then
+    if not myPos or not autoBuy.depotTarget or not autoBuy.depotPos then
       stopAutoBuy()
       return
     end
 
-    if posEq(myPos, autoBuy.depotTarget) then
+    if mapDist(myPos, autoBuy.depotPos) <= 1 then
       autoBuy.step = "use_depot"
       scheduleAutoBuy(50)
       return
@@ -1454,7 +1464,6 @@ autoBuyStep = function()
 
     autoBuy.depotTries = autoBuy.depotTries + 1
     if autoBuy.depotTries > 40 then
-      warn("[DEPOT] timeout ao tentar chegar no depot")
       stopAutoBuy()
       return
     end
@@ -1466,14 +1475,12 @@ autoBuyStep = function()
 
   if autoBuy.step == "use_depot" then
     if useDepotAt(autoBuy.depotPos) then
-      warn("[DEPOT] chegou e usou o depot")
       autoBuy.openTries = 0
       autoBuy.step = "open_market"
       scheduleAutoBuy(700)
       return
     end
 
-    warn("[DEPOT] chegou, mas falhou ao usar o depot")
     stopAutoBuy()
     return
   end
@@ -1481,17 +1488,14 @@ autoBuyStep = function()
   if autoBuy.step == "open_market" then
     autoBuy.openTries = autoBuy.openTries + 1
     if autoBuy.openTries > 10 then
-      warn("[DEPOT] market 12903 nao apareceu")
       stopAutoBuy()
       return
     end
 
     if useMarketFromLocker() then
-      warn("[DEPOT] market 12903 aberto")
       autoBuy.tasks = buildMarketBuyListFromPanel()
 
       if #autoBuy.tasks == 0 then
-        warn("[MarketBuyerUI] lista do painel vazia")
         closeMarketWindow()
         stopAutoBuy()
         return
@@ -1513,14 +1517,12 @@ autoBuyStep = function()
   if autoBuy.step == "open_mail" then
     autoBuy.mailTries = autoBuy.mailTries + 1
     if autoBuy.mailTries > 10 then
-      warn("[MAIL] mail 12902 nao apareceu")
       pcall(function() rootWidget:focus() end)
       stopAutoBuy()
       return
     end
 
     if useMailFromLocker() then
-      warn("[MAIL] your inbox aberto")
       autoBuy.collectTries = 0
       autoBuy.ensureLootTries = 0
       autoBuy.mailItemOrder = buildAllowedMailItemOrder()
@@ -1540,7 +1542,6 @@ autoBuyStep = function()
 
     local targetId = autoCurrentMailItemId()
     if targetId <= 0 then
-      warn("[MAIL] itens da lista recolhidos")
       pcall(function() rootWidget:focus() end)
       stopAutoBuy()
       return
@@ -1552,7 +1553,6 @@ autoBuyStep = function()
     if status == "moved" then
       autoBuy.ensureLootTries = 0
       autoBuy.mailItemRetries[targetId] = 0
-      warn(string.format("[MAIL] recolhendo %s x%d", getItemDisplayName(movedId), tonumber(movedCount) or 1))
       scheduleAutoBuy(350)
       return
     end
@@ -1567,7 +1567,6 @@ autoBuyStep = function()
     if status == "ensure_loot" then
       autoBuy.ensureLootTries = autoBuy.ensureLootTries + 1
       if autoBuy.ensureLootTries > 5 then
-        warn("[MAIL] falhou abrir container para " .. getItemDisplayName(targetId) .. ", pulando")
         autoNextMailItem()
         scheduleAutoBuy(300)
         return
@@ -1580,7 +1579,6 @@ autoBuyStep = function()
       tries = tries + 1
       autoBuy.mailItemRetries[targetId] = tries
       if tries >= 3 then
-        warn("[MAIL] falhou mover " .. getItemDisplayName(targetId) .. " 3x, pulando")
         autoNextMailItem()
         scheduleAutoBuy(250)
         return
@@ -1593,7 +1591,6 @@ autoBuyStep = function()
       tries = tries + 1
       autoBuy.mailItemRetries[targetId] = tries
       if tries >= 3 then
-        warn("[MAIL] erro ao recolher " .. getItemDisplayName(targetId) .. (err and (": " .. err) or "") .. ", pulando")
         autoNextMailItem()
         scheduleAutoBuy(250)
         return
@@ -1603,7 +1600,6 @@ autoBuyStep = function()
     end
 
     if autoBuy.collectTries > 80 then
-      warn("[MAIL] timeout geral no recolhimento")
       pcall(function() rootWidget:focus() end)
       stopAutoBuy()
       return
