@@ -1,735 +1,456 @@
 setDefaultTab("Tools")
+modules.game_textmessage.displayGameMessage("SISTEMA DE IMBUE ATUALIZADO, RECONFIGURE OS ITENS DENTRO DO PAINEL.")
 
-local panelName = "imbuimentSystem"
-
--- ==========================================================
--- STORAGE
--- ==========================================================
-storage[panelName] = storage[panelName] or {
-  enabled = false,   -- BotSwitch
-  list = {},
-  lastUid = 0,
-  timers = {}        -- [itemIdStr] = { detected={...}, updated=millis }
-}
-local st = storage[panelName]
-st.timers = st.timers or {}
-
-local function nextUid()
-  st.lastUid = (tonumber(st.lastUid) or 0) + 1
-  return st.lastUid
-end
-
-local function nowMillis() 
-  if g_clock and type(g_clock.millis) == "function" then return g_clock.millis() end 
-  if now then return now end 
-  return 0 
-end
-
-local function itemKey(id) return tostring(id or 0) end
-
--- ==========================================================
--- BUTTON TOP (Config + IMBUIR MANUAL abaixo do switch)
--- ==========================================================
-buttonImbuiment = setupUI([[
-Panel
-  height: 33
-
-  BotSwitch
-    id: status
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
-    text-align: center
-    height: 18
-    text: AUTO IMBUIMENT
-    font: verdana-9px
-    color: white
-    image-source: /images/ui/button_rounded
-    $on:
-      color: #32CD32
-      image-color: #3CB371
-    $!on:
-      image-color: gray
-      color: white
-
-  Button
-    id: settings
-    anchors.top: prev.top
-    anchors.left: prev.right
-    anchors.right: parent.right
-    margin-left: 0
-    height: 18
-    text: Config
-    font: verdana-9px
-    image-color: #363636
-    image-source: /images/ui/button_rounded
-    opacity: 1.00
-    color: white
-    $hover:
-      opacity: 0.95
-      color: green
-
-  Button
-    id: ImbuirManual
-    anchors.top: status.bottom
-    anchors.left: status.left
-    anchors.right: parent.right
-    width: 78
-    height: 15
-    margin-top: 1
-    text: MANUAL IMBUIMENT
-    font: verdana-9px
-    image-source: /images/ui/button_rounded
-    image-color: #363636
-    color: orange
-    $hover:
-      opacity: 0.95
-]], parent)
-
-storage[panelName] = storage[panelName] or {}
-storage[panelName].enabled = storage[panelName].enabled == true
-st = storage[panelName]
-st.timers = st.timers or {}
-
--- aplica estado inicial
-buttonImbuiment.status:setOn(st.enabled == true)
-
-buttonImbuiment.status.onClick = function(widget)
-  local newState = not widget:isOn()
-  widget:setOn(newState)
-  st.enabled = newState
-end
--- ==========================================================
--- UI WINDOW (mantido layout)
--- ==========================================================
-imbuimentInterface = setupUI([[
-imbuimentLabel < Label
-  height: 18
-  margin-top: 3
-
-  ComboBox
-    id: imbuiment
-    anchors.left: parent.left
-    anchors.verticalCenter: parent.verticalCenter
-    margin-left: 0
-    width: 136
-    height: 18
-    font: verdana-9px
-    text-align: center
-    image-color: #828282
-
-  ComboBox
-    id: nivelimbuiment
-    anchors.left: prev.right
-    anchors.verticalCenter: parent.verticalCenter
-    margin-left: 5
-    width: 70
-    height: 18
-    font: verdana-9px
-    text-align: left
-    image-color: #828282
-    @onSetup: |
-      self:addOption("")
-      self:addOption("Basic")
-      self:addOption("Intricate")
-      self:addOption("Powerful")
-
-imbRow < Panel
-  height: 34
-  margin-top: 2
-  layout:
-    type: horizontalBox
-    spacing: 6
-
-  Item
-    id: item
-    size: 32 32
-    image-source: /images/ui/item
-    padding: 3
-    border: 1 black
-    image-color: #828282
-    margin-left: 3
-
-  Label
-    id: text
-    height: 18
-    width: 220
-    text: Imbuiments:
-    font: verdana-9px
-    color: white
-
-  Button
-    id: remove
-    width: 30
-    height: 18
-    margin-right: 5
-    text: X
-    font: verdana-9px
-    color: white
-    image-source: /images/ui/button_rounded
-    image-color: #8b2a2a
-    $hover:
-      opacity: 0.92
-      color: black
-
-UIWindow
-  id: mainPanel
-  size: 330 365
-  border: 1 black
-  anchors.centerIn: parent
-  margin-top: -60
-
-  Panel
-    id: background
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.bottom: parent.bottom
-    background-color: black
-    opacity: 0.70
-
-  Panel
-    id: topPanel
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
-    size: 120 30
-    text-align: center
-    !text: tr('LNS Custom | Imbuiments System')
-    color: orange
-    margin-left: 0
-    margin-right: 0
-    background-color: black
-    $hover:
-      image-color: gray
+local panelImbuiment = setupUI([[
+MainWindow
+  size: 450 337
+  text: Panel Imbuement
 
   UIButton
-    id: closePanel
-    anchors.top: topPanel.top
-    anchors.right: parent.right
-    size: 18 18
-    margin-top: 6
-    margin-right: 10
-    background-color: orange
-    text: X
-    color: white
-    opacity: 1.00
-    $hover:
-      color: black
-      opacity: 0.80
-
-  FlatPanel
-    id: panelMain
-    anchors.top: topPanel.bottom
-    anchors.right: parent.right
-    anchors.left: parent.left
-    margin-top: 8
-    margin-right: 8
-    margin-left: 8
-    height: 135
-    image-color: #363636
-
-  BotItem
-    id: botItem
-    anchors.top: prev.top
-    anchors.left: prev.left
-    image-source: /images/ui/item
-    border: 1 black
-    image-color: #828282
-    margin-top: 10
-    margin-left: 8
-    size: 80 100
-    padding: 5
-
-  Label
-    id: labelType
-    anchors.top: prev.top
-    anchors.left: prev.right
-    text: TYPE:
-    font: verdana-9px
-    margin-left: 10
-    margin-top: 3
-
-  ComboBox
-    id: typeSelect
-    anchors.top: prev.top
-    anchors.left: prev.right
-    margin-left: 2
-    margin-top: -3
-    width: 100
-    height: 18
-    image-color: #828282
-    font: verdana-9px
-    @onSetup: |
-      self:addOption("")
-      self:addOption("Helmet")
-      self:addOption("Armor")
-      self:addOption("Legs")
-      self:addOption("Boots")
-      self:addOption("Shield/Book")
-      self:addOption("Weapon")
-      self:addOption("Bag")
-      self:addOption("Ring")
-      self:addOption("Amulet")
-
-  Label
-    id: labelSlots
-    anchors.top: prev.top
-    anchors.left: prev.right
-    text: SLOTS:
-    font: verdana-9px
-    margin-left: 10
-    margin-top: 3
-
-  SpinBox
-    id: slotsSelect
-    anchors.top: prev.top
-    anchors.left: prev.right
-    margin-left: 2
-    margin-top: -3
-    width: 25
-    height: 18
-    image-color: #828282
-    minimum: 0
-    maximum: 3
-    font: verdana-9px
-
-  imbuimentLabel
-    id: imbuiment1
-    anchors.top: typeSelect.bottom
-    anchors.left: labelType.left
-    anchors.right: panelMain.right
-    margin-right: 10
-    margin-top: 10
-    image-color: #828282
-    font: verdana-9px
-
-  imbuimentLabel
-    id: imbuiment2
-    anchors.top: prev.bottom
-    anchors.left: prev.left
-    anchors.right: prev.right
-    margin-top: 10
-    image-color: #828282
-    font: verdana-9px
-
-  imbuimentLabel
-    id: imbuiment3
-    anchors.top: prev.bottom
-    anchors.left: prev.left
-    anchors.right: prev.right
-    margin-top: 10
-    image-color: #828282
-    font: verdana-9px
-
-  Button
-    id: Adicionar
-    anchors.left: panelMain.left
-    anchors.top: imbuiment3.bottom
-    anchors.right: panelMain.right
-    height: 18
-    margin-top: 5
-    margin-left: 7
-    margin-right: 6
-    image-source: /images/ui/button_rounded
-    image-color: #363636
-    font: verdana-9px
-    text: ADICIONAR
-    color: orange
-
-  FlatPanel
-    id: listBox
-    anchors.top: Adicionar.bottom
-    anchors.left: panelMain.left
-    anchors.right: panelMain.right
-    margin-top: 6
-    height: 190
-    image-color: #363636
-
-  ScrollablePanel
-    id: listaImbuiments
-    anchors.fill: parent
-    anchors.top: listBox.top
-    anchors.left: listBox.left
-    anchors.right: listBox.right
-    anchors.bottom: listBox.bottom
-    padding: 2
-    vertical-scrollbar: listImbuimentsScrollBar
-    layout:
-      type: verticalBox
-      spacing: 2
-
-  VerticalScrollBar
-    id: listImbuimentsScrollBar
-    anchors.top: listBox.top
-    anchors.bottom: listBox.bottom
-    anchors.right: listBox.right
-    step: 14
-    pixels-scroll: true
-    image-color: #363636
-]], g_ui.getRootWidget())
-
-imbuimentInterface:hide()
-
-function buttonsPreyPcMobile()
-  if modules._G.g_app.isMobile() then
-    buttonImbuiment.settings:show()
-    buttonImbuiment.status:setMarginRight(55)
-  else
-    buttonImbuiment.settings:hide()
-    buttonImbuiment.status:setMarginRight(0)
-  end
-end
-buttonsPreyPcMobile()
-
-buttonImbuiment.status.onMouseRelease = function(widget, mousePos, mouseButton)
-  if mouseButton == 2 then
-    if not imbuimentInterface:isVisible() then
-      imbuimentInterface:show()
-      imbuimentInterface:raise();
-      imbuimentInterface:focus();
-    else
-      imbuimentInterface:hide()
-    end
-  end
-end
-
-local timerUI = setupUI([[
-timerRow < Panel
-  height: 44
-  margin-top: 2
-  layout:
-    type: horizontalBox
-    spacing: 6
-
-  Item
-    id: item
-    size: 32 32
-    image-source: /images/ui/item
-    padding: 3
-    border: 1 black
-    image-color: #828282
-    margin-left: 3
-
-  Label
-    id: text
-    height: 44
-    width: 240
-    font: verdana-9px
-    color: white
-    text-wrap: true
-
-UIWindow
-  id: timerWin
-  size: 250 220
-  anchors.right: parent.right
-  anchors.bottom: parent.bottom
-  margin-right: 12
-  margin-bottom: 110
-
-  Panel
-    id: background
-    anchors.fill: parent
-    opacity: 0.70
-
-  Panel
-    id: top
+    id: clickHere
     anchors.top: parent.top
     anchors.left: parent.left
-    anchors.right: parent.right
-    height: 20
+    text: Click Here
+    margin-top: -2
+    margin-left: 100
+    color: #FFD700
+    text-auto-resize: true
+    font: verdana-11px-rounded
+    opacity: 1.00
+    $hover:
+      opacity: 0.80
 
   Label
-    id: title
-    anchors.centerIn: top
-    text: Imbuiments Timers
-    font: verdana-9px-bold
-    color: yellow
+    id: labelClick
+    anchors.verticalCenter: clickHere.verticalCenter
+    anchors.left: clickHere.right
+    margin-left: 4
+    margin-top: 0
+    font: verdana-11px-rounded
+    text: to manage auto imbuement
 
   FlatPanel
-    id: box
-    anchors.top: top.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.bottom: parent.bottom
-    image-source:
-    margin: 6
+    id: flatP
+    anchors.fill: parent
+    margin: -8
+    margin-top: 15
+    margin-bottom: 20
+    
+    Label
+      text: Clean Imbuements with:
+      anchors.top: parent.top
+      anchors.left: parent.left
+      color: gray
+      margin-top: 3
+      margin-left: 5
 
-  ScrollablePanel
-    id: list
-    anchors.fill: box
-    padding: 2
-    vertical-scrollbar: scroll
-    layout:
-      type: verticalBox
-      spacing: 2
+    HorizontalScrollBar
+      id: limparImbuements
+      anchors.verticalCenter: prev.verticalCenter
+      anchors.left: prev.right
+      anchors.right: parent.right
+      margin-left: 5
+      margin-right: 5
+      minimum: 1
+      maximum: 1200
 
-  VerticalScrollBar
-    id: scroll
-    anchors.top: box.top
-    anchors.bottom: box.bottom
-    anchors.right: box.right
-    step: 16
-    pixels-scroll: true
-    visible: false
+      Label
+        id: limparText
+        anchors.centerIn: parent
+        font: verdana-11px-rounded
+        color: #d7c08a
+        text-auto-resize: true
+        text: "1 min"
+        phantom: true
+
+    Label
+      text: Imbuement Mode:
+      anchors.top: prev.bottom
+      anchors.left: parent.left
+      color: gray
+      margin-top: 7
+      margin-left: 5
+
+    BotSwitch
+      id: imbuingShrine
+      anchors.left: limparImbuements.left
+      anchors.verticalCenter: prev.verticalCenter
+      text: Imbuing Shrine
+      width: 135
+      font: verdana-11px-rounded
+      $on:
+        image-color: green
+        color: green
+      $!on:
+        image-color: gray
+        color: white
+
+    BotSwitch
+      id: portableShrine
+      anchors.left: prev.right
+      anchors.verticalCenter: prev.verticalCenter
+      text: Portable Shrine
+      width: 135
+      margin-top: 0
+      margin-left: 1
+      font: verdana-11px-rounded
+      $on:
+        image-color: green
+        color: green
+      $!on:
+        image-color: gray
+        color: white
+
+    TextList
+      id: imbueList
+      anchors.top: prev.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      margin: 5
+      margin-right: 15
+      vertical-scrollbar: imbueListScrollBar
+
+    VerticalScrollBar
+      id: imbueListScrollBar
+      anchors.top: imbueList.top
+      anchors.bottom: imbueList.bottom
+      anchors.left: imbueList.right
+      step: 10
+      pixels-scroll: true
+      border: 1 #1f1f1f
+
+  Button
+    id: closePanel
+    anchors.left: flatP.left
+    anchors.right: flatP.right
+    anchors.top: flatP.bottom
+    margin-left: -1
+    margin-top: 5
+    text: Fechar
+    font: verdana-11px-rounded
 ]], g_ui.getRootWidget())
+panelImbuiment:hide()
 
-timerUI:hide()
+local panelImbuementManager = setupUI([[
+MainWindow
+  id: imbuementManager
+  size: 420 410
+  text: Auto Imbuement Manager
 
--- storage da posição
-st.timerWinPos = st.timerWinPos or nil -- {x=..., y=...}
+  FlatPanel
+    id: bg
+    anchors.fill: parent
+    margin: -8
+    margin-top: 0
+    margin-bottom: 20
 
-local function isMoveKeyPressed()
-  -- PC: CTRL  |  Mobile: F2 (igual teu exemplo)
-  if modules._G.g_app.isMobile() then
-    return modules.corelib.g_keyboard.isKeyPressed("F2");
-	else
-		return modules.corelib.g_keyboard.isCtrlPressed();
-  end
-end
+    FlatPanel
+      id: leftBox
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      height: 60
+      margin-top: 8
+      margin-left: 6
+      margin-right: 6
 
-local function applyTimerPos()
-  if not timerUI or not timerUI.setPosition then return end
-  if st.timerWinPos and st.timerWinPos.x and st.timerWinPos.y then
-    timerUI:breakAnchors()
-    timerUI:setPosition({ x = st.timerWinPos.x, y = st.timerWinPos.y })
-  end
-end
+      Label
+        text: Item
+        anchors.top: parent.top
+        anchors.left: parent.left
+        margin-left: 13
+        margin-top: -5
+        text-auto-resize: true
+        font: verdana-11px-rounded
+        color: #d7c08a
 
-local function saveTimerPos()
-  if not timerUI or not timerUI.getPosition then return end
-  local p = timerUI:getPosition()
-  if not p then return end
-  st.timerWinPos = { x = p.x, y = p.y }
-end
+      BotItem
+        id: itemToImbue
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: parent.left
+        margin-top: 0
+        margin-left: 12
+        border: 1 #d7c08a
 
-local function disableDrag()
-  if not timerUI then return end
-  timerUI.onDragEnter = nil
-  timerUI.onDragMove  = nil
-  timerUI:setFocusable(false)
-  timerUI:setPhantom(true)
-  timerUI:setDraggable(false)
-  timerUI:setOpacity(1.00)
-end
+      VerticalSeparator
+        id: vsep
+        anchors.top: parent.top
+        anchors.left: prev.right
+        anchors.bottom: parent.bottom
+        margin-left: 13
 
-local function enableDrag()
-  if not timerUI then return end
-  timerUI:setFocusable(true)
-  timerUI:setPhantom(false)
-  timerUI:setDraggable(true)
-  timerUI:setOpacity(1.00)
+      Label
+        text: Slot Equipament
+        anchors.top: parent.top
+        anchors.left: prev.right
+        margin-left: 60
+        margin-top: -5
+        text-auto-resize: true
+        font: verdana-11px-rounded
+        color: #d7c08a
 
-  timerUI.onDragEnter = function(widget, mousePos)
-    widget:breakAnchors()
-    widget.movingReference = { x = mousePos.x - widget:getX(), y = mousePos.y - widget:getY() }
-    return true
-  end
+      UIItem
+        id: head
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: vsep.right
+        margin-left: 10
+        image-source: /images/game/slots/head
+        size: 29 29
+        margin-top: 3
+        border: 1 #444444
+        focusable: true
 
-  timerUI.onDragMove = function(widget, mousePos, moved)
-    local parent = widget:getParent()
-    if not parent or not parent.getRect then return true end
-    local r = parent:getRect()
+      UIItem
+        id: body
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: prev.right
+        margin-left: 2
+        image-source: /images/game/slots/body
+        size: 29 29
+        margin-top: 3
+        border: 1 #444444
+        focusable: true
 
-    local x = mousePos.x - (widget.movingReference and widget.movingReference.x or 0)
-    local y = mousePos.y - (widget.movingReference and widget.movingReference.y or 0)
+      UIItem
+        id: legs
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: prev.right
+        margin-left: 2
+        image-source: /images/game/slots/legs
+        size: 29 29
+        margin-top: 3
+        border: 1 #444444
+        focusable: true
 
-    -- limita dentro da tela (root)
-    x = math.min(math.max(r.x, x), r.x + r.width  - widget:getWidth())
-    y = math.min(math.max(r.y, y), r.y + r.height - widget:getHeight())
+      UIItem
+        id: feet
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: prev.right
+        margin-left: 2
+        image-source: /images/game/slots/feet
+        size: 29 29
+        margin-top: 3
+        border: 1 #444444
+        focusable: true
 
-    widget:move(x, y)
-    st.timerWinPos = { x = x, y = y } -- salva em tempo real
-    return true
-  end
-end
+      UIItem
+        id: left-hand
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: prev.right
+        margin-left: 2
+        image-source: /images/game/slots/left-hand
+        size: 29 29
+        margin-top: 3
+        border: 1 #444444
+        focusable: true
 
--- aplica posição salva assim que cria
-applyTimerPos()
-disableDrag()
+      UIItem
+        id: right-hand
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: prev.right
+        margin-left: 2
+        image-source: /images/game/slots/right-hand
+        size: 29 29
+        margin-top: 3
+        border: 1 #444444
+        focusable: true
 
--- controla drag PC/Mobile + salva fallback se mexer por outras formas
-local lastPressed = nil
-macro(100, function()
-  local stHud = storage.hudInterfaceControl
-  if not stHud or not stHud.switches or stHud.switches.timerImbuiment ~= true then return end
-  if not timerUI or not timerUI.isVisible or not timerUI:isVisible() then return end
+      UIItem
+        id: back
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: prev.right
+        margin-left: 2
+        image-source: /images/game/slots/back
+        size: 29 29
+        margin-top: 3
+        border: 1 #444444
+        focusable: true
 
-  local pressed = isMoveKeyPressed()
-  if pressed ~= lastPressed then
-    if pressed then enableDrag() else disableDrag() end
-    lastPressed = pressed
-  end
+      VerticalSeparator
+        id: vsep2
+        anchors.top: parent.top
+        anchors.left: prev.right
+        anchors.bottom: parent.bottom
+        margin-left: 13
 
-  -- fallback: garante que se mover por qualquer motivo, salva
-  saveTimerPos()
-end)
+      Label
+        text: Qtd. Imbue
+        anchors.top: parent.top
+        anchors.left: prev.right
+        margin-left: 13
+        margin-top: -5
+        text-auto-resize: true
+        font: verdana-11px-rounded
+        color: #d7c08a
 
--- ==========================================================
--- POPULATE IMBUE LIST (painel)
--- ==========================================================
-local IMBUE_NAMES = {
-  "",
-  "Life Leech",
-  "Mana Leech",
-  "Critical",
-  "Magic Level",
-  "Skill Boost",
-  "Fire Protection",
-  "Ice Protection",
-  "Earth Protection",
-  "Energy Protection",
-  "Death Protection",
-  "Holy Protection",
-}
+      SpinBox
+        id: qtdimbue
+        anchors.verticalCenter: back.verticalCenter
+        anchors.left: vsep2.right
+        anchors.right: parent.right
+        margin-left: 10
+        margin-right: 10
+        text-align: center
+        font: verdana-11px-rounded
+        color: gray
+        minimum: 1
+        maximum: 3
+  
+    FlatPanel
+      id: bottomBox
+      anchors.top: leftBox.bottom
+      anchors.left: leftBox.left
+      anchors.right: leftBox.right
+      anchors.bottom: parent.bottom
+      margin-top: 5
+      margin-bottom: 5
 
-local function fillImbueCombo(combo)
-  combo:clearOptions()
-  for i = 1, #IMBUE_NAMES do combo:addOption(IMBUE_NAMES[i]) end
-  if type(combo.setText) == "function" then combo:setText("") end
-end
+      Label
+        text: Slot Imbue 1:
+        anchors.top: parent.top
+        anchors.left: parent.left
+        margin-left: 6
+        margin-top: 2
+        text-auto-resize: true
+        font: verdana-11px-rounded
+        color: #d7c08a
 
-fillImbueCombo(imbuimentInterface.imbuiment1.imbuiment)
-fillImbueCombo(imbuimentInterface.imbuiment2.imbuiment)
-fillImbueCombo(imbuimentInterface.imbuiment3.imbuiment)
+      TextList
+        id: imbueList1
+        anchors.top: prev.bottom
+        anchors.left: parent.left
+        height: 70
+        width: 260
+        margin-left: 6
+        margin-right: 19
+        margin-top: 2
+        vertical-scrollbar: imbueScroll1
+        font: verdana-11px-rounded
 
--- ==========================================================
--- SLOTS: trava/destrava
--- ==========================================================
-local function setRowEnabled(row, enabled)
-  row.imbuiment:setEnabled(enabled)
-  row.nivelimbuiment:setEnabled(enabled)
+      VerticalScrollBar
+        id: imbueScroll1
+        anchors.top: imbueList1.top
+        anchors.bottom: imbueList1.bottom
+        anchors.left: prev.right
+        margin-right: 6
+        step: 10
+        pixels-scroll: true
+        visible: true
 
-  if enabled then
-    row.imbuiment:setOpacity(1.00)
-    row.nivelimbuiment:setOpacity(1.00)
-  else
-    row.imbuiment:setOpacity(0.55)
-    row.nivelimbuiment:setOpacity(0.55)
-    if type(row.imbuiment.setText) == "function" then row.imbuiment:setText("") end
-    if type(row.nivelimbuiment.setText) == "function" then row.nivelimbuiment:setText("") end
-  end
-end
+      TextList
+        id: imbueNivel1
+        anchors.top: prev.top
+        anchors.left: imbueList1.right
+        anchors.right: parent.right
+        height: 42
+        margin-left: 20
+        margin-right: 10
+        font: verdana-11px-rounded
 
-local function refreshSlots()
-  local n = tonumber(imbuimentInterface.slotsSelect:getValue()) or 0
-  setRowEnabled(imbuimentInterface.imbuiment1, n >= 1)
-  setRowEnabled(imbuimentInterface.imbuiment2, n >= 2)
-  setRowEnabled(imbuimentInterface.imbuiment3, n >= 3)
-end
+      Label
+        text: Slot Imbue 2:
+        anchors.top: imbueList1.bottom
+        anchors.left: parent.left
+        margin-left: 6
+        margin-top: 4
+        text-auto-resize: true
+        font: verdana-11px-rounded
+        color: #d7c08a
 
-imbuimentInterface.slotsSelect.onValueChange  = function() refreshSlots() end
-imbuimentInterface.slotsSelect.onValueChanged = function() refreshSlots() end
-refreshSlots()
+      TextList
+        id: imbueList2
+        anchors.top: prev.bottom
+        anchors.left: parent.left
+        height: 70
+        width: 260
+        margin-left: 6
+        margin-right: 19
+        margin-top: 2
+        vertical-scrollbar: imbueScroll2
+        font: verdana-11px-rounded
 
--- ==========================================================
--- LISTA (painel)
--- ==========================================================
-local function comboText(combo)
-  if not combo then return "" end
-  if type(combo.getText) == "function" then return tostring(combo:getText() or "") end
-  return ""
-end
+      VerticalScrollBar
+        id: imbueScroll2
+        anchors.top: imbueList2.top
+        anchors.bottom: imbueList2.bottom
+        anchors.left: imbueList2.right
+        margin-right: 6
+        step: 10
+        pixels-scroll: true
+        visible: true
 
-local function formatImbText(imbs)
-  local parts = {}
-  for i = 1, #imbs do
-    local n = tostring(imbs[i] and imbs[i].name or "")
-    local l = tostring(imbs[i] and imbs[i].level or "")
-    if n ~= "" then
-      if l ~= "" then parts[#parts + 1] = n .. " (" .. l .. ")"
-      else parts[#parts + 1] = n end
-    end
-  end
-  if #parts == 0 then return "(Nenhum)" end
-  if #parts == 1 then return parts[1] end
-  if #parts == 2 then return parts[1] .. " & " .. parts[2] end
-  local out = parts[1]
-  for i = 2, #parts do
-    if i == #parts then out = out .. " & " .. parts[i] else out = out .. ", " .. parts[i] end
-  end
-  return out
-end
+      TextList
+        id: imbueNivel2
+        anchors.top: prev.top
+        anchors.left: imbueList2.right
+        anchors.right: parent.right
+        height: 42
+        margin-left: 20
+        margin-right: 10
+        font: verdana-11px-rounded
 
-local function rebuildList()
-  local listPanel = imbuimentInterface.listaImbuiments
-  listPanel:destroyChildren()
+      Label
+        text: Slot Imbue 3:
+        anchors.top: imbueList2.bottom
+        anchors.left: parent.left
+        margin-left: 6
+        margin-top: 4
+        text-auto-resize: true
+        font: verdana-11px-rounded
+        color: #d7c08a
 
-  for i = 1, #st.list do
-    local e = st.list[i]
-    local row = g_ui.createWidget("imbRow", listPanel)
+      TextList
+        id: imbueList3
+        anchors.top: prev.bottom
+        anchors.left: parent.left
+        width: 260
+        height: 70
+        margin-left: 6
+        margin-right: 19
+        margin-top: 2
+        vertical-scrollbar: imbueScroll3
+        font: verdana-11px-rounded
 
-    local fixedId = tonumber(e.itemId) or 0
-    row.item:setItemId(fixedId)
-    row.item.onItemChange = function() row.item:setItemId(fixedId) end
-    row.item.onDrop = function() return false end
+      VerticalScrollBar
+        id: imbueScroll3
+        anchors.top: imbueList3.top
+        anchors.bottom: imbueList3.bottom
+        anchors.left: prev.right
+        margin-right: 6
+        step: 10
+        pixels-scroll: true
+        visible: true
 
-    row.text:setText('Imbuiments: "' .. formatImbText(e.imbues or {}) .. '"')
+      TextList
+        id: imbueNivel3
+        anchors.top: prev.top
+        anchors.left: imbueList3.right
+        anchors.right: parent.right
+        height: 42
+        margin-left: 20
+        margin-right: 10
+        font: verdana-11px-rounded
 
-    row.remove.onClick = function()
-      for idx = #st.list, 1, -1 do
-        if st.list[idx].uid == e.uid then
-          table.remove(st.list, idx)
-          break
-        end
-      end
-      rebuildList()
-    end
-  end
-end
+  Button
+    id: cancelar
+    anchors.top: prev.bottom
+    anchors.left: prev.left
+    margin-top: 5
+    width: 200
+    text: Cancelar
+    font: verdana-11px-rounded
 
--- ==========================================================
--- ADD + RESET
--- ==========================================================
-local function clearCombo(cb)
-  if not cb then return end
-  if type(cb.setText) == "function" then cb:setText("") end
-  if type(cb.setCurrentOption) == "function" then cb:setCurrentOption("") end
-end
-
-local function resetForm()
-  imbuimentInterface.botItem:setItemId(0)
-  clearCombo(imbuimentInterface.typeSelect)
-
-  if type(imbuimentInterface.slotsSelect.setValue) == "function" then
-    imbuimentInterface.slotsSelect:setValue(0)
-  end
-
-  clearCombo(imbuimentInterface.imbuiment1.imbuiment)
-  clearCombo(imbuimentInterface.imbuiment1.nivelimbuiment)
-  clearCombo(imbuimentInterface.imbuiment2.imbuiment)
-  clearCombo(imbuimentInterface.imbuiment2.nivelimbuiment)
-  clearCombo(imbuimentInterface.imbuiment3.imbuiment)
-  clearCombo(imbuimentInterface.imbuiment3.nivelimbuiment)
-
-  refreshSlots()
-end
-
-imbuimentInterface.Adicionar.onClick = function()
-  local itemId = tonumber(imbuimentInterface.botItem:getItemId()) or 0
-  local typText = comboText(imbuimentInterface.typeSelect)
-  local slots = tonumber(imbuimentInterface.slotsSelect:getValue()) or 0
-
-  if itemId <= 0 then warn("[Imb] Selecione um item no BotItem.") return end
-  if typText == "" then warn("[Imb] Selecione o TYPE.") return end
-
-  local imbues = {}
-  if slots >= 1 then imbues[#imbues + 1] = { name = comboText(imbuimentInterface.imbuiment1.imbuiment), level = comboText(imbuimentInterface.imbuiment1.nivelimbuiment) } end
-  if slots >= 2 then imbues[#imbues + 1] = { name = comboText(imbuimentInterface.imbuiment2.imbuiment), level = comboText(imbuimentInterface.imbuiment2.nivelimbuiment) } end
-  if slots >= 3 then imbues[#imbues + 1] = { name = comboText(imbuimentInterface.imbuiment3.imbuiment), level = comboText(imbuimentInterface.imbuiment3.nivelimbuiment) } end
-
-  local filtered = {}
-  for i = 1, #imbues do
-    if tostring(imbues[i].name or "") ~= "" then filtered[#filtered + 1] = imbues[i] end
-  end
-  imbues = filtered
-
-  local uid = nextUid()
-  st.list[#st.list + 1] = { uid = uid, itemId = itemId, type = typText, slots = slots, imbues = imbues }
-
-  rebuildList()
-  resetForm()
-end
+  Button
+    id: confirmar
+    anchors.top: prev.top
+    anchors.left: prev.right
+    width: 200
+    margin-left: 5
+    text: Confirmar
+    font: verdana-11px-rounded
+]], g_ui.getRootWidget())
+panelImbuementManager:hide()
 
 local function destroyImbuingPanel()
   if not g_ui or not g_ui.getRootWidget then return false end
@@ -762,122 +483,37 @@ local function destroyImbuingPanel()
   return false
 end
 
--- ==========================================================
--- OPEN/CLOSE
--- ==========================================================
-buttonImbuiment.settings.onClick = function()
-  if imbuimentInterface:isVisible() then
-    imbuimentInterface:hide()
-  else
-    imbuimentInterface:show()
-    imbuimentInterface:raise()
-    imbuimentInterface:focus()
-    rebuildList()
-  end
-end
+setDefaultTab("Tools")
 
-imbuimentInterface.closePanel.onClick = function() imbuimentInterface:hide() end
-
--- ==========================================================
--- TIMER ENGINE (LOOK nos itens e mostra tempos)
--- ==========================================================
-local function safeFindItemInContainers(itemId)
-  if not itemId or itemId <= 0 then return nil end
-  if type(getContainers) ~= "function" then return nil end
-
-  local conts = getContainers()
-  if not conts then return nil end
-
-  for c = 1, #conts do
-    local cont = conts[c]
-    if cont and cont.getItems then
-      local items = cont:getItems()
-      if items then
-        for i = 1, #items do
-          local it = items[i]
-          if it and it.getId and it:getId() == itemId then
-            return it
-          end
-        end
-      end
-    end
-  end
-  return nil
-end
-
-local function findItemObject(itemId, typText)
-  itemId = tonumber(itemId) or 0
-  typText = tostring(typText or "")
-
-  -- MUITO IMPORTANTE:
-  -- findItem normalmente retorna o "Thing" com posição válida (incluindo backpack),
-  -- isso é o que faz o IMBUIR funcionar quando o item está na bag.
-  if type(findItem) == "function" then
-    local itAny = findItem(itemId)
-    if itAny and itAny.getId and itAny:getId() == itemId then
-      return itAny
-    end
-  end
-
-  -- slots equipados
-  if typText == "Helmet" and type(getHead) == "function" then
-    local it = getHead()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-  if typText == "Armor" and type(getBody) == "function" then
-    local it = getBody()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-  if typText == "Legs" and type(getLeg) == "function" then
-    local it = getLeg()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-  if typText == "Boots" and type(getFeet) == "function" then
-    local it = getFeet()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-  if typText == "Weapon" and type(getLeft) == "function" then
-    local it = getLeft()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-  if typText == "Shield/Book" and type(getRight) == "function" then
-    local it = getRight()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-  if typText == "Ring" and type(getFinger) == "function" then
-    local it = getFinger()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-  if typText == "Amulet" and type(getNeck) == "function" then
-    local it = getNeck()
-    if it and it.getId and it:getId() == itemId then return it end
-  end
-
-  -- containers abertos (fallback)
-  return safeFindItemInContainers(itemId)
-end
-
-local function doLook(itemObj)
-  if not itemObj then return false end
-  if g_game and type(g_game.look) == "function" then
-    g_game.look(itemObj)
-    return true
-  end
-  if type(look) == "function" then
-    look(itemObj)
-    return true
-  end
-  return false
-end
-
--- tier -> horas padrão (fallback quando o LOOK não mostra tempo)
-local TIER_TO_HOURS = {
-  Basic = 5,
-  Intricate = 10,
-  Powerful = 20
+storage.autoImbuement = storage.autoImbuement or {
+  enabled = false,
+  limparMinutes = 60,
+  shrineMode = "imbuing", -- "imbuing" / "portable"
+  entries = {},
+  nextUid = 0,
+  timers = {},
+  recentActions = {}
 }
 
--- mapeia o "nome do imbue" do LOOK -> nome visual do seu painel
+local db = storage.autoImbuement
+db.entries = db.entries or {}
+db.timers = db.timers or {}
+db.recentActions = db.recentActions or {}
+
+local panel = panelImbuiment
+local manager = panelImbuementManager
+
+-- =========================================================
+-- CONST / MAPS
+-- =========================================================
+local IMBUE_OPTIONS = {
+  "Life Leech", "Mana Leech", "Critical", "Magic Level", "Skill Boost",
+  "Fire Protection", "Ice Protection", "Earth Protection", "Energy Protection",
+  "Death Protection", "Holy Protection",
+}
+
+local IMBUE_LEVELS = { "Basic", "Intricate", "Powerful" }
+
 local LOOK_NAME_TO_VISUAL = {
   ["Void"] = "Mana Leech",
   ["Vampirism"] = "Life Leech",
@@ -900,350 +536,6 @@ local LOOK_NAME_TO_VISUAL = {
   ["Swiftness"] = "Speed"
 }
 
-local function trim(s)
-  return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
-end
-
-local function parseTimeToSeconds(text)
-  text = tostring(text or "")
-
-  -- 02:19h / 2:19h / 5:54h
-  local hh, mm = text:match("(%d+):(%d+)%s*[hH]")
-  if hh and mm then
-    return (tonumber(hh) or 0) * 3600 + (tonumber(mm) or 0) * 60
-  end
-
-  -- 02:19 (às vezes vem sem 'h')
-  hh, mm = text:match("(%d+):(%d+)")
-  if hh and mm then
-    return (tonumber(hh) or 0) * 3600 + (tonumber(mm) or 0) * 60
-  end
-
-  -- 2h 19m
-  local h2, m2 = text:match("(%d+)%s*[hH]%s*(%d+)%s*[mM]")
-  if h2 then
-    return (tonumber(h2) or 0) * 3600 + (tonumber(m2) or 0) * 60
-  end
-
-  -- 2h
-  local h3 = text:match("(%d+)%s*[hH]")
-  if h3 then
-    return (tonumber(h3) or 0) * 3600
-  end
-
-  return nil
-end
-
-local function secondsToHHMM(seconds)
-  seconds = tonumber(seconds) or 0
-  if seconds < 0 then seconds = 0 end
-  local hh = math.floor(seconds / 3600)
-  local mm = math.floor((seconds % 3600) / 60)
-  return string.format("%02d:%02dh", hh, mm)
-end
-
--- extrai imbues do "Imbuements: (...)" com tempo INDIVIDUAL por imbue
--- retorna { {tier, raw, visual, seconds, timeStr}, ... }
-local function parseImbuesFromLookText(text)
-  text = tostring(text or "")
-
-  local imbBlock = text:match("Imbuements:%s*%((.-)%)")
-  if not imbBlock or imbBlock == "" then return {} end
-
-  local out = {}
-
-  for part in imbBlock:gmatch("([^,]+)") do
-    part = trim(part)
-    if part ~= "" then
-      if part:find("Free Slot", 1, true) then
-        -- ignora
-      else
-        local tier, rest = part:match("^(Basic)%s+(.+)$")
-        if not tier then tier, rest = part:match("^(Intricate)%s+(.+)$") end
-        if not tier then tier, rest = part:match("^(Powerful)%s+(.+)$") end
-
-        tier = trim(tier or "")
-        rest = trim(rest or part)
-
-        -- rest: "Void 5:54h" | "Vampirism 18:56h"
-        local timeToken = rest:match("(%d+:%d+%s*[hH])") or rest:match("(%d+%s*[hH]%s*%d+%s*[mM])")
-        local rawName = rest
-        if timeToken then
-          rawName = trim(rest:gsub(timeToken, ""))
-        end
-
-        rawName = trim(rawName)
-        local visual = LOOK_NAME_TO_VISUAL[rawName] or rawName
-
-        local sec = nil
-        if timeToken then
-          sec = parseTimeToSeconds(timeToken)
-        end
-
-        -- fallback se não vier tempo no look
-        if not sec then
-          local h = TIER_TO_HOURS[tostring(tier)] or 0
-          sec = h > 0 and (h * 3600) or 0
-        end
-
-        out[#out + 1] = {
-          tier = tier,
-          raw = rawName,
-          visual = visual,
-          seconds = sec,
-          timeStr = secondsToHHMM(sec)
-        }
-      end
-    end
-  end
-
-  return out
-end
-
-local function ensureTimerEntry(itemId)
-  local k = itemKey(itemId)
-  st.timers[k] = st.timers[k] or {}
-  return st.timers[k]
-end
-
-local function updateTimerFromLook(itemId, lookText)
-  local info = ensureTimerEntry(itemId)
-  info.detected = parseImbuesFromLookText(lookText)
-  info.updated = nowMillis()
-end
-
-local function getRemainingSeconds(itemId, imbueIndex)
-  local info = st.timers[itemKey(itemId)]
-  if not info or not info.detected or not info.detected[imbueIndex] then return nil end
-
-  local total = tonumber(info.detected[imbueIndex].seconds)
-  if not total then return nil end
-
-  local elapsed = math.floor((nowMillis() - (tonumber(info.updated) or nowMillis())) / 1000)
-  local remain = total - elapsed
-  if remain < 0 then remain = 0 end
-  return remain
-end
-
-local function rebuildTimersUI()
-  local stHud = storage.hudInterfaceControl
-  if not stHud or not stHud.switches or stHud.switches.timerImbuiment ~= true then return end
-  if not timerUI or not timerUI.list then return end
-  local list = timerUI.list
-  list:destroyChildren()
-
-  for i = 1, #st.list do
-    local e = st.list[i]
-    local itemId = tonumber(e.itemId) or 0
-    if itemId > 0 then
-      local row = g_ui.createWidget("timerRow", list)
-      row.item:setItemId(itemId)
-      row.item.onItemChange = function() row.item:setItemId(itemId) end
-      row.item.onDrop = function() return false end
-
-      local info = st.timers[itemKey(itemId)]
-      local lines = {}
-
-      -- prioridade: detectado pelo look (real)
-      local detected = info and info.detected or nil
-      if detected and #detected > 0 then
-        for j = 1, #detected do
-          local vis  = tostring(detected[j].visual or detected[j].raw or "")
-          local tier = tostring(detected[j].tier or "")
-          if vis ~= "" then
-            local remain = getRemainingSeconds(itemId, j)
-            local tStr = remain and secondsToHHMM(remain) or (detected[j].timeStr or "--:--h")
-            if tier ~= "" then
-              lines[#lines + 1] = vis .. " (" .. tier .. "): " .. tStr
-            else
-              lines[#lines + 1] = vis .. ": " .. tStr
-            end
-          end
-        end
-      else
-        -- fallback: configurado no painel (sem look ainda)
-        local conf = e.imbues or {}
-        if #conf == 0 then
-          lines[#lines + 1] = "Sem imbuiments configurados"
-        else
-          for j = 1, #conf do
-            local nm = tostring(conf[j] and conf[j].name or "")
-            local lv = tostring(conf[j] and conf[j].level or "")
-            if nm ~= "" then
-              if lv ~= "" then
-                lines[#lines + 1] = nm .. " (" .. lv .. "): --:--h"
-              else
-                lines[#lines + 1] = nm .. ": --:--h"
-              end
-            end
-          end
-        end
-      end
-
-      row.text:setText(table.concat(lines, "\n"))
-    end
-  end
-end
-
-local lookState = {
-  idx = 0,
-  pending = nil -- { itemId=, started=millis }
-}
-
--- captura texto do LOOK
--- =========================
--- LOOK CAPTURE (buffer)
--- Junta linhas do look e extrai "Imbuements:" mesmo quando vem quebrado
--- =========================
-local lookBuffer = { acc = "", lastAt = 0, itemId = nil }
-
-local function flushLookBuffer()
-  if not lookBuffer.itemId then
-    lookBuffer.acc = ""
-    return
-  end
-
-  local full = tostring(lookBuffer.acc or "")
-  if full:find("Imbuements:", 1, true) then
-    updateTimerFromLook(lookBuffer.itemId, full)
-    rebuildTimersUI()
-  end
-
-  lookBuffer.acc = ""
-  lookBuffer.itemId = nil
-end
-
-onTextMessage(function(mode, text)
-  if not lookState.pending then return end
-
-  text = tostring(text or "")
-  if text == "" then return end
-
-  -- janela maior porque look vem em múltiplas linhas
-  if nowMillis() - (lookState.pending.started or 0) > 4000 then
-    lookState.pending = nil
-    lookBuffer.acc = ""
-    lookBuffer.itemId = nil
-    return
-  end
-
-  -- acumula tudo que chegar logo após o look
-  lookBuffer.itemId = lookState.pending.itemId
-  lookBuffer.acc = (lookBuffer.acc == "" and text) or (lookBuffer.acc .. "\n" .. text)
-  lookBuffer.lastAt = nowMillis()
-
-  -- fecha o pending, mas espera um pouquinho pra juntar as próximas linhas
-  lookState.pending = nil
-
-  schedule(400, function()
-    -- só flusha se ninguém adicionou mais texto no buffer nesses 400ms
-    if lookBuffer.itemId and (nowMillis() - (lookBuffer.lastAt or 0) >= 350) then
-      flushLookBuffer()
-    end
-  end)
-end)
-
-macro(300, function()
-  if not storage[switchHud].enabled then 
-    timerUI:hide() 
-    return
-  end
-  local stHud = storage.hudInterfaceControl
-  if not stHud or not stHud.switches or stHud.switches.timerImbuiment ~= true then
-    timerUI:hide()
-    return
-  end
-
-  if not timerUI:isVisible() then
-    timerUI:show()
-    timerUI:raise()
-  end
-end)
-
--- dá LOOK (10s)
-macro(10000, function()
-  local stHud = storage.hudInterfaceControl
-  if not stHud or not stHud.switches or stHud.switches.timerImbuiment ~= true then return end
-  if not timerUI:isVisible() then return end
-
-  if #st.list == 0 then
-    rebuildTimersUI()
-    return
-  end
-
-  if lookState.pending then return end
-
-  lookState.idx = lookState.idx + 1
-  if lookState.idx > #st.list then lookState.idx = 1 end
-
-  local e = st.list[lookState.idx]
-  if not e then return end
-
-  local itemId = tonumber(e.itemId) or 0
-  if itemId <= 0 then return end
-
-  local it = findItemObject(itemId, tostring(e.type or ""))
-  if not it or not it.getId or it:getId() ~= itemId then return end
-
-  if doLook(it) then
-    lookState.pending = { itemId = itemId, started = nowMillis() }
-  end
-end)
-
--- refresh do texto do painel (não dá look, só redesenha)
-macro(1000, function()
-  local stHud = storage.hudInterfaceControl
-  if not stHud or not stHud.switches or stHud.switches.timerImbuiment ~= true then return end
-  if not timerUI:isVisible() then return end
-  rebuildTimersUI()
-end)
-
--- ==========================================================
--- AUTO IMBUE ENGINE (somente com BotSwitch ON)
--- ==========================================================
-local SHRINES = {25060, 25061, 25182, 25183}
-
-local function tierNameToNumber(tierName)
-  if tierName == "Basic" then return 1 end
-  if tierName == "Intricate" then return 2 end
-  if tierName == "Powerful" then return 3 end
-  return 3
-end
-
-local function getTierFromWindowName(name)
-  name = tostring(name or "")
-  if name:find("Basic") then return 1 end
-  if name:find("Intricate") then return 2 end
-  if name:find("Powerful") then return 3 end
-  return 3
-end
-
-local function tableFind(t, v)
-  for i = 1, #t do if t[i] == v then return true end end
-  return false
-end
-
-local function findShrine()
-  if not g_map or not g_map.getTiles then return nil, nil end
-  local tiles = g_map.getTiles(posz())
-  if not tiles then return nil, nil end
-
-  for i = 1, #tiles do
-    local tile = tiles[i]
-    local items = tile and tile.getItems and tile:getItems()
-    if items then
-      for j = 1, #items do
-        local it = items[j]
-        if it and it.getId and tableFind(SHRINES, it:getId()) then
-          return it, tile:getPosition()
-        end
-      end
-    end
-  end
-  return nil, nil
-end
-
--- VISUAL do painel -> GROUP interno
 local IMBUE_VISUAL_TO_GROUP = {
   ["Life Leech"]        = "Vampirism",
   ["Mana Leech"]        = "Void",
@@ -1259,15 +551,12 @@ local IMBUE_VISUAL_TO_GROUP = {
   ["Holy Protection"]   = "Demon Presence",
 }
 
--- GROUP interno -> texto/categoria do shrine
 local GROUP_TO_SHRINE_TEXT = {
   ["Void"]           = "Mana Leech",
   ["Vampirism"]      = "Hit Points Leech",
   ["Strike"]         = "Critical",
-
   ["Epiphany"]       = "Magic Level",
   ["Precision"]      = "Skillboost (Distance)",
-
   ["Lich Shroud"]    = "Elemental Protection (Death)",
   ["Snake Skin"]     = "Elemental Protection (Earth)",
   ["Demon Presence"] = "Elemental Protection (Holy)",
@@ -1276,14 +565,1211 @@ local GROUP_TO_SHRINE_TEXT = {
   ["Cloud Fabric"]   = "Elemental Protection (Energy)",
 }
 
+local SHRINES = {25060, 25061, 25182, 25183}
+local PORTABLE_SHRINE = 14513
+local RECENT_ACTION_MS = 10000
+
+local SLOT_TO_INV = {
+  head = InventorySlotHead or 1,
+  back = InventorySlotBack or 3,
+  body = InventorySlotBody or 4,
+  ["right-hand"] = InventorySlotRight or 5,
+  ["left-hand"] = InventorySlotLeft or 6,
+  legs = InventorySlotLeg or 7,
+  feet = InventorySlotFeet or 8,
+}
+
+local SLOT_WIDGET_IDS = {"head", "body", "legs", "feet", "left-hand", "right-hand", "back"}
+
+-- =========================================================
+-- REFS
+-- =========================================================
+local function W(root, id)
+  if not root then return nil end
+  if root.recursiveGetChildById then
+    return root:recursiveGetChildById(id)
+  end
+  if root.getChildById then
+    return root:getChildById(id)
+  end
+  return nil
+end
+
+local refs = {
+  item = W(manager, "itemToImbue"),
+  qtd = W(manager, "qtdimbue"),
+  confirm = W(manager, "confirmar"),
+  cancel = W(manager, "cancelar"),
+
+  open = W(panel, "clickHere"),
+  close = W(panel, "closePanel"),
+  list = W(panel, "imbueList"),
+  limpar = W(panel, "limparImbuements"),
+  limparText = W(panel, "limparText"),
+  shrine = W(panel, "imbuingShrine"),
+  portable = W(panel, "portableShrine"),
+
+  leftBox = W(manager, "leftBox"),
+  bottomBox = W(manager, "bottomBox"),
+}
+
+local imbueLists = { W(manager, "imbueList1"), W(manager, "imbueList2"), W(manager, "imbueList3") }
+local levelLists = { W(manager, "imbueNivel1"), W(manager, "imbueNivel2"), W(manager, "imbueNivel3") }
+
+local slotWidgets = {
+  head = W(manager, "head"),
+  body = W(manager, "body"),
+  legs = W(manager, "legs"),
+  feet = W(manager, "feet"),
+  ["left-hand"] = W(manager, "left-hand"),
+  ["right-hand"] = W(manager, "right-hand"),
+  back = W(manager, "back"),
+}
+
+-- =========================================================
+-- TEMPLATES
+-- =========================================================
+local selectRowTemplate = [[
+selectRow < UIWidget
+  id: root
+  height: 13
+  focusable: true
+  background-color: alpha
+  opacity: 1.00
+
+  $hover:
+    background-color: #2F2F2F
+    opacity: 0.85
+
+  $focus:
+    background-color: #2f6f3e
+    opacity: 0.95
+
+  Label
+    id: text
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    margin-left: 5
+    color: white
+    text: ""
+]]
+
+local savedRowTemplate = [[
+savedRow < UIWidget
+  id: root
+  height: 45
+  focusable: true
+  background-color: alpha
+  margin-top: 2
+  opacity: 1.00
+  border: 1 alpha
+
+  $hover:
+    background-color: #2F2F2F
+    opacity: 0.80
+    border: 1 gray
+
+  $focus:
+    background-color: #404040
+    border: 1 gray
+    opacity: 0.90
+
+  UIItem
+    id: icon
+    anchors.left: parent.left
+    anchors.top: parent.top
+    margin-left: 4
+    margin-top: 2
+    size: 40 40
+
+  Label
+    id: text
+    anchors.left: icon.right
+    anchors.right: remove.left
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    margin-left: 6
+    margin-right: 4
+    text-align: center
+    font: verdana-11px-rounded
+    color: white
+    text-wrap: true
+    text-vertical-auto-resize: true
+
+  Button
+    id: remove
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    width: 16
+    height: 16
+    margin-right: 3
+    text: X
+    color: #FF4040
+    image-color: #363636
+    image-source: /images/ui/button_rounded
+]]
+
+g_ui.loadUIFromString(selectRowTemplate)
+g_ui.loadUIFromString(savedRowTemplate)
+
+-- =========================================================
+-- HELPERS
+-- =========================================================
+local function clamp(v, a, b)
+  v = tonumber(v) or a
+  if v < a then return a end
+  if v > b then return b end
+  return v
+end
+
+local function trim(s)
+  return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function lowerTrim(s)
+  return trim(s):lower()
+end
+
+local function cloneTable(orig)
+  if type(orig) ~= "table" then return orig end
+  local copy = {}
+  for k, v in pairs(orig) do
+    if type(v) == "table" then
+      copy[k] = cloneTable(v)
+    else
+      copy[k] = v
+    end
+  end
+  return copy
+end
+
+local function nowMs()
+  if type(now) == "number" then return now end
+  if g_clock and g_clock.millis then return g_clock.millis() end
+  return os.time() * 1000
+end
+
+local function later(ms, fn)
+  if type(schedule) == "function" then
+    return schedule(ms, fn)
+  end
+  if type(scheduleEvent) == "function" then
+    return scheduleEvent(fn, ms)
+  end
+  if g_dispatcher and g_dispatcher.scheduleEvent then
+    return g_dispatcher:scheduleEvent(fn, ms)
+  end
+  return fn()
+end
+
+local function clearChildren(widget)
+  if not widget or not widget.getChildren then return end
+  local children = widget:getChildren()
+  for i = #children, 1, -1 do
+    local child = children[i]
+    if child and (not child.isDestroyed or not child:isDestroyed()) then
+      child:destroy()
+    end
+  end
+end
+
+local function getRowLabel(row)
+  if not row then return nil end
+  return row.text or (row.getChildById and row:getChildById("text")) or nil
+end
+
+local function getRowRemove(row)
+  if not row then return nil end
+  return row.remove or (row.getChildById and row:getChildById("remove")) or nil
+end
+
+local function getRowIcon(row)
+  if not row then return nil end
+  return row.icon or (row.getChildById and row:getChildById("icon")) or nil
+end
+
+local function clearRowFocus(listWidget)
+  if not listWidget or not listWidget.getChildren then return end
+  for _, child in ipairs(listWidget:getChildren()) do
+    if child.setFocused then child:setFocused(false) end
+    child._selected = false
+  end
+  listWidget._selectedRow = nil
+  listWidget._selectedValue = nil
+end
+
+local function setRowFocus(listWidget, row, value)
+  if not listWidget or not row then return end
+  clearRowFocus(listWidget)
+  if row.setFocused then row:setFocused(true) end
+  row._selected = true
+  listWidget._selectedRow = row
+  listWidget._selectedValue = value
+end
+
+local function getSelectedRowValue(listWidget)
+  if not listWidget then return "" end
+  return tostring(listWidget._selectedValue or "")
+end
+
+local function createSelectRow(listWidget, text, onSelect)
+  local row = g_ui.createWidget("selectRow", listWidget)
+  local label = getRowLabel(row)
+  row._value = tostring(text or "")
+
+  if label then
+    label:setText(row._value)
+  end
+
+  row.onClick = function(widget)
+    if listWidget._locked then return end
+    setRowFocus(listWidget, widget, widget._value)
+    if onSelect then onSelect(widget._value, widget) end
+  end
+
+  return row
+end
+
+local function fillSelectList(listWidget, entries, onSelect)
+  if not listWidget then return end
+  clearChildren(listWidget)
+  clearRowFocus(listWidget)
+  for i = 1, #entries do
+    createSelectRow(listWidget, entries[i], onSelect)
+  end
+end
+
+local function selectListValue(listWidget, value)
+  if not listWidget or not listWidget.getChildren then return false end
+  value = tostring(value or "")
+  for _, child in ipairs(listWidget:getChildren()) do
+    if tostring(child._value or "") == value then
+      setRowFocus(listWidget, child, child._value)
+      return true
+    end
+  end
+  clearRowFocus(listWidget)
+  return false
+end
+
+local function nextUid()
+  db.nextUid = (tonumber(db.nextUid) or 0) + 1
+  return db.nextUid
+end
+
+local function itemTimerKey(itemId)
+  return tostring(tonumber(itemId) or 0)
+end
+
+local function canonImbueName(name)
+  name = trim(tostring(name or ""))
+  if name == "" then return "" end
+
+  if name == "Hit Points Leech" then return "Life Leech" end
+  if name == "Mana Leech" then return "Mana Leech" end
+  if name == "Critical" then return "Critical" end
+  if name == "Magic Level" then return "Magic Level" end
+
+  if name == "Skillboost (Distance)" or name == "Skillboost (Sword)" or name == "Skillboost (Club)" or name == "Skillboost (Axe)" then
+    return "Skill Boost"
+  end
+
+  if name == "Elemental Protection (Fire)" then return "Fire Protection" end
+  if name == "Elemental Protection (Ice)" then return "Ice Protection" end
+  if name == "Elemental Protection (Earth)" then return "Earth Protection" end
+  if name == "Elemental Protection (Energy)" then return "Energy Protection" end
+  if name == "Elemental Protection (Death)" then return "Death Protection" end
+  if name == "Elemental Protection (Holy)" then return "Holy Protection" end
+
+  return LOOK_NAME_TO_VISUAL[name] or name
+end
+
+local function tierNameToNumber(name)
+  name = lowerTrim(name)
+  if name == "basic" then return 1 end
+  if name == "intricate" then return 2 end
+  return 3
+end
+
+local function getTierFromWindowName(name)
+  name = lowerTrim(name)
+  if name:find("basic", 1, true) then return 1 end
+  if name:find("intricate", 1, true) then return 2 end
+  if name:find("powerful", 1, true) then return 3 end
+  return 3
+end
+
+local function uiItemSlotNameToType(slotId)
+  if slotId == "head" then return "Helmet" end
+  if slotId == "body" then return "Armor" end
+  if slotId == "legs" then return "Legs" end
+  if slotId == "feet" then return "Boots" end
+  if slotId == "left-hand" then return "Weapon" end
+  if slotId == "right-hand" then return "Shield/Book" end
+  if slotId == "back" then return "Bag" end
+  return ""
+end
+
+local function typeToSlotKey(typ)
+  if typ == "Helmet" then return "head" end
+  if typ == "Armor" then return "body" end
+  if typ == "Legs" then return "legs" end
+  if typ == "Boots" then return "feet" end
+  if typ == "Weapon" then return "left-hand" end
+  if typ == "Shield/Book" then return "right-hand" end
+  if typ == "Bag" then return "back" end
+  return nil
+end
+
+local function getDistance(a, b)
+  return math.abs(a.x - b.x) + math.abs(a.y - b.y)
+end
+
+local function getChebyshevDistance(a, b)
+  return math.max(math.abs(a.x - b.x), math.abs(a.y - b.y))
+end
+
+local function isWalkablePos(pos)
+  local tile = g_map.getTile(pos)
+  if not tile then return false end
+  if tile.isWalkable then
+    return tile:isWalkable()
+  end
+  return true
+end
+
+local function getBestAdjacentShrinePos(shrinePos, playerPos)
+  local candidates = {
+    {x = shrinePos.x + 1, y = shrinePos.y, z = shrinePos.z},
+    {x = shrinePos.x - 1, y = shrinePos.y, z = shrinePos.z},
+    {x = shrinePos.x, y = shrinePos.y + 1, z = shrinePos.z},
+    {x = shrinePos.x, y = shrinePos.y - 1, z = shrinePos.z},
+    {x = shrinePos.x + 1, y = shrinePos.y + 1, z = shrinePos.z},
+    {x = shrinePos.x + 1, y = shrinePos.y - 1, z = shrinePos.z},
+    {x = shrinePos.x - 1, y = shrinePos.y + 1, z = shrinePos.z},
+    {x = shrinePos.x - 1, y = shrinePos.y - 1, z = shrinePos.z},
+  }
+
+  local bestPos, bestDist = nil, 99999
+  for _, pos in ipairs(candidates) do
+    if isWalkablePos(pos) then
+      local dist = getDistance(playerPos, pos)
+      if dist < bestDist then
+        bestDist = dist
+        bestPos = pos
+      end
+    end
+  end
+
+  return bestPos
+end
+
+local function normalizeEntry(entry)
+  entry = entry or {}
+  entry.uid = tonumber(entry.uid or 0) or 0
+  entry.itemId = tonumber(entry.itemId or 0) or 0
+  entry.type = entry.type or ""
+  entry.slotKey = entry.slotKey or typeToSlotKey(entry.type)
+  entry.slots = clamp(entry.slots or 1, 1, 3)
+  entry.imbues = entry.imbues or {}
+
+  for i = 1, entry.slots do
+    entry.imbues[i] = entry.imbues[i] or {name = "", level = "Basic"}
+    entry.imbues[i].name = trim(entry.imbues[i].name or "")
+    entry.imbues[i].level = trim(entry.imbues[i].level or "Basic")
+  end
+
+  return entry
+end
+
+local function formatImbText(imbs, qtd)
+  local parts = {}
+  qtd = tonumber(qtd or #imbs) or #imbs
+
+  for i = 1, qtd do
+    local n = tostring(imbs[i] and imbs[i].name or "")
+    local l = tostring(imbs[i] and imbs[i].level or "")
+    if n ~= "" and n ~= "nil" then
+      if l ~= "" and l ~= "nil" then
+        parts[#parts + 1] = n .. " (" .. l .. ")"
+      else
+        parts[#parts + 1] = n
+      end
+    end
+  end
+
+  if #parts == 0 then return "(Nenhum)" end
+  return table.concat(parts, "\n")
+end
+
+-- =========================================================
+-- STATE UI
+-- =========================================================
+local state = {
+  slot = nil,
+  imbues = { nil, nil, nil },
+  levels = { "Basic", "Basic", "Basic" },
+  editingUid = nil
+}
+
+local imbState = {
+  active = false,
+  queue = {},
+  idx = 1,
+  waitingWindow = false,
+  waitingApply = false,
+  currentEntry = nil,
+  currentItem = nil,
+  currentItemSource = nil,
+  shrine = nil,
+  shrinePos = nil,
+  lastAction = 0,
+  reopenAfterClear = false
+}
+
+-- =========================================================
+-- UI HELPERS
+-- =========================================================
+local function refreshSlotBorders()
+  for name, widget in pairs(slotWidgets) do
+    if widget and widget.setBorderWidth then widget:setBorderWidth(1) end
+    if widget and widget.setBorderColor then
+      widget:setBorderColor(name == state.slot and "#00ff66" or "#3a3a3a")
+    end
+    if widget and widget.setOpacity then
+      widget:setOpacity(name == state.slot and 1.0 or 0.85)
+    end
+  end
+end
+
+local function setSectionEnabled(i, enabled)
+  local a, b = imbueLists[i], levelLists[i]
+
+  if a then
+    a._locked = not enabled
+    if a.setEnabled then a:setEnabled(enabled) end
+    if a.setFocusable then a:setFocusable(enabled) end
+    if a.setOpacity then a:setOpacity(enabled and 1.0 or 0.40) end
+  end
+
+  if b then
+    b._locked = not enabled
+    if b.setEnabled then b:setEnabled(enabled) end
+    if b.setFocusable then b:setFocusable(enabled) end
+    if b.setOpacity then b:setOpacity(enabled and 1.0 or 0.40) end
+  end
+end
+
+local function getQtd()
+  if refs.qtd and refs.qtd.getValue then
+    return clamp(refs.qtd:getValue(), 1, 3)
+  end
+  return 1
+end
+
+local function updateLimparText(v)
+  v = clamp(v or 1, 1, 1200)
+  db.limparMinutes = v
+  if refs.limparText then refs.limparText:setText(v .. " min") end
+end
+
+local function setShrine(mode)
+  db.shrineMode = (mode == "portable" and "portable" or "imbuing")
+  if refs.shrine and refs.shrine.setOn then refs.shrine:setOn(db.shrineMode == "imbuing") end
+  if refs.portable and refs.portable.setOn then refs.portable:setOn(db.shrineMode == "portable") end
+end
+
+local function buildSelectList(listWidget, options, selected, enabled, setter)
+  if not listWidget then return end
+  clearChildren(listWidget)
+
+  for _, value in ipairs(options) do
+    local row = g_ui.createWidget("selectRow", listWidget)
+    local label = getRowLabel(row)
+    row._value = value
+
+    if label then label:setText(value) end
+
+    if enabled and selected == value then
+      setRowFocus(listWidget, row, value)
+    end
+
+    row.onClick = function(widget)
+      if listWidget._locked then return end
+      setRowFocus(listWidget, widget, widget._value)
+      if setter then setter(value) end
+    end
+
+    if not enabled then
+      if row.setEnabled then row:setEnabled(false) end
+      if row.setOpacity then row:setOpacity(0.40) end
+    end
+  end
+end
+
+local function refreshManagerLists()
+  local qtd = getQtd()
+
+  for i = 1, 3 do
+    local enabled = i <= qtd
+    if not enabled then
+      state.imbues[i] = nil
+      state.levels[i] = "Basic"
+    end
+
+    setSectionEnabled(i, enabled)
+
+    buildSelectList(imbueLists[i], IMBUE_OPTIONS, state.imbues[i], enabled, function(v)
+      state.imbues[i] = v
+    end)
+
+    buildSelectList(levelLists[i], IMBUE_LEVELS, state.levels[i], enabled, function(v)
+      state.levels[i] = v
+    end)
+  end
+end
+
+local function resetManager()
+  state.slot = nil
+  state.editingUid = nil
+  state.imbues = { nil, nil, nil }
+  state.levels = { "Basic", "Basic", "Basic" }
+
+  if refs.item and refs.item.setItemId then refs.item:setItemId(0) end
+  if refs.qtd and refs.qtd.setValue then refs.qtd:setValue(1) end
+
+  refreshSlotBorders()
+  refreshManagerLists()
+end
+
+local function loadEntryToManager(entry)
+  entry = normalizeEntry(cloneTable(entry))
+  state.editingUid = tonumber(entry.uid) or nil
+  state.slot = entry.slotKey or typeToSlotKey(entry.type)
+  state.imbues = { nil, nil, nil }
+  state.levels = { "Basic", "Basic", "Basic" }
+
+  if refs.item and refs.item.setItemId then refs.item:setItemId(entry.itemId or 0) end
+  if refs.qtd and refs.qtd.setValue then refs.qtd:setValue(entry.slots or 1) end
+
+  for i = 1, entry.slots do
+    state.imbues[i] = entry.imbues[i] and entry.imbues[i].name or nil
+    state.levels[i] = entry.imbues[i] and entry.imbues[i].level or "Basic"
+  end
+
+  refreshSlotBorders()
+  refreshManagerLists()
+end
+
+local function removeEntryByUid(uid)
+  uid = tonumber(uid)
+  if not uid then return end
+
+  for i = #db.entries, 1, -1 do
+    if tonumber(db.entries[i].uid) == uid then
+      table.remove(db.entries, i)
+      break
+    end
+  end
+
+  rebuildMainList()
+end
+
+local function createSavedRow(listWidget, entry, onRemove)
+  local row = g_ui.createWidget("savedRow", listWidget)
+  local icon = getRowIcon(row)
+  local label = getRowLabel(row)
+  local remove = getRowRemove(row)
+
+  row._uid = tonumber(entry.uid)
+
+  if icon and icon.setItemId then
+    icon:setItemId(tonumber(entry.itemId) or 0)
+    icon.onItemChange = function() icon:setItemId(tonumber(entry.itemId) or 0) end
+    icon.onDrop = function() return false end
+  end
+
+  if label then
+    label:setText(formatImbText(entry.imbues or {}, entry.slots))
+  end
+
+  row.onClick = function(widget)
+    setRowFocus(listWidget, widget, widget._uid)
+    for i = 1, #db.entries do
+      if tonumber(db.entries[i].uid) == tonumber(widget._uid) then
+        loadEntryToManager(db.entries[i])
+        panel:hide()
+        manager:show()
+        manager:raise()
+        manager:focus()
+        break
+      end
+    end
+  end
+
+  if remove then
+    remove.onClick = function()
+      if onRemove then onRemove(entry, row) end
+    end
+  end
+
+  return row
+end
+
+function rebuildMainList()
+  if not refs.list then return end
+  clearChildren(refs.list)
+  clearRowFocus(refs.list)
+
+  for i = 1, #db.entries do
+    local entry = normalizeEntry(db.entries[i])
+    db.entries[i] = entry
+    createSavedRow(refs.list, entry, function(data)
+      removeEntryByUid(data.uid)
+    end)
+  end
+end
+
+local function saveEntry()
+  local itemId = refs.item and refs.item.getItemId and tonumber(refs.item:getItemId()) or 0
+  local slotKey = state.slot
+  local slots = getQtd()
+
+  if itemId <= 0 then
+    warn("[Imb] Selecione um item.")
+    return false
+  end
+
+  if not slotKey or slotKey == "" then
+    warn("[Imb] Selecione o slot do equipamento.")
+    return false
+  end
+
+  local entry = {
+    uid = state.editingUid or nextUid(),
+    itemId = itemId,
+    slotKey = slotKey,
+    type = uiItemSlotNameToType(slotKey),
+    slots = slots,
+    imbues = {}
+  }
+
+  for i = 1, slots do
+    local name = trim(state.imbues[i] or "")
+    local level = trim(state.levels[i] or "Basic")
+
+    if name == "" then
+      warn("[Imb] Selecione o imbue do slot " .. i .. ".")
+      return false
+    end
+
+    if level == "" then
+      warn("[Imb] Selecione o nível do slot " .. i .. ".")
+      return false
+    end
+
+    entry.imbues[i] = { name = name, level = level }
+  end
+
+  local replaced = false
+  for i = 1, #db.entries do
+    if tonumber(db.entries[i].uid) == tonumber(entry.uid) then
+      db.entries[i] = normalizeEntry(entry)
+      replaced = true
+      break
+    end
+  end
+
+  if not replaced then
+    db.entries[#db.entries + 1] = normalizeEntry(entry)
+  end
+
+  return true
+end
+
+-- =========================================================
+-- UI BIND
+-- =========================================================
+buttonImbuiment = setupUI([[
+Panel
+  height: 18
+
+  Button
+    id: settings
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-left: 0
+    height: 18
+    text: Imbuement Manager
+    opacity: 1.00
+
+]], parent)
+
+db.enabled = true
+
+buttonImbuiment.settings.onClick = function()
+  if panel:isVisible() then
+    panel:hide()
+    manager:hide()
+  else
+    rebuildMainList()
+    panel:show()
+    panel:raise()
+    panel:focus()
+  end
+end
+
+function checkerImbuementsList()
+  if db.enabled ~= true then return true end
+  if imbState.active then return "retry" end
+  startImbueAllFromList()
+  CaveBot.setOff()
+  return "retry"
+end
+
+local imbIcon = addIcon("imbI", {
+  item = 14513,
+  text = "M.Imbue",
+  switchable = false,
+  moveable = true,
+}, function()
+  startImbueAllFromList(true)
+end)
+
+imbIcon:setSize({height = 57, width = 54})
+imbIcon.text:setFont('verdana-11px-rounded')
+imbIcon.item:setSize('35 35')
+
+if refs.limpar then
+  if refs.limpar.setMinimum then refs.limpar:setMinimum(1) end
+  if refs.limpar.setMaximum then refs.limpar:setMaximum(1200) end
+  if refs.limpar.setValue then refs.limpar:setValue(clamp(db.limparMinutes or 60, 1, 1200)) end
+  refs.limpar.onValueChange = function()
+    updateLimparText(refs.limpar:getValue())
+  end
+end
+updateLimparText(db.limparMinutes or 60)
+
+if refs.shrine then
+  refs.shrine.onClick = function() setShrine("imbuing") end
+end
+if refs.portable then
+  refs.portable.onClick = function() setShrine("portable") end
+end
+setShrine(db.shrineMode or "imbuing")
+
+if refs.open then
+  refs.open.onClick = function()
+    resetManager()
+    panel:hide()
+    manager:show()
+    manager:raise()
+    manager:focus()
+  end
+end
+
+if refs.close then
+  refs.close.onClick = function()
+    panel:hide()
+    manager:hide()
+  end
+end
+
+if refs.cancel then
+  refs.cancel.onClick = function()
+    manager:hide()
+    panel:show()
+    panel:raise()
+    panel:focus()
+    resetManager()
+  end
+end
+
+if refs.confirm then
+  refs.confirm.onClick = function()
+    if not saveEntry() then return end
+    rebuildMainList()
+    manager:hide()
+    panel:show()
+    panel:raise()
+    panel:focus()
+    resetManager()
+  end
+end
+
+if refs.qtd then
+  refs.qtd.onValueChange = function()
+    refreshManagerLists()
+  end
+  refs.qtd.onValueChanged = function()
+    refreshManagerLists()
+  end
+end
+
+for _, id in ipairs(SLOT_WIDGET_IDS) do
+  local w = slotWidgets[id]
+  if w then
+    w.onClick = function()
+      state.slot = id
+      refreshSlotBorders()
+    end
+    w.onMouseRelease = function(widget, mousePos, button)
+      if button ~= MouseLeftButton then return false end
+      state.slot = id
+      refreshSlotBorders()
+      return true
+    end
+  end
+end
+
+refreshManagerLists()
+refreshSlotBorders()
+rebuildMainList()
+
+-- =========================================================
+-- ITEM FIND / LOOK
+-- =========================================================
+local function findItemInContainers(itemId)
+  if not itemId or itemId <= 0 then return nil end
+  if type(getContainers) ~= "function" then return nil end
+
+  local conts = getContainers()
+  if not conts then return nil end
+
+  for c = 1, #conts do
+    local cont = conts[c]
+    if cont and cont.getItems then
+      local items = cont:getItems()
+      if items then
+        for i = 1, #items do
+          local it = items[i]
+          if it and it.getId and it:getId() == itemId then
+            return it
+          end
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
+local function getInventoryItemBySlot(slotKey)
+  local invSlot = SLOT_TO_INV[slotKey]
+  if not invSlot then return nil end
+
+  if getInventoryItem then
+    return getInventoryItem(invSlot)
+  end
+
+  if g_game and g_game.getLocalPlayer and g_game.getLocalPlayer() and g_game.getLocalPlayer().getInventoryItem then
+    return g_game.getLocalPlayer():getInventoryItem(invSlot)
+  end
+
+  return nil
+end
+
+local function findItemObject(itemId, typText, slotKey)
+  itemId = tonumber(itemId) or 0
+  if itemId <= 0 then return nil end
+
+  local equipped = slotKey and getInventoryItemBySlot(slotKey) or nil
+  if equipped and equipped.getId and equipped:getId() == itemId then
+    return equipped, "equip"
+  end
+
+  if type(findItem) == "function" then
+    local any = findItem(itemId)
+    if any and any.getId and any:getId() == itemId then
+      return any, "findItem"
+    end
+  end
+
+  local cont = findItemInContainers(itemId)
+  if cont then return cont, "container" end
+
+  return nil, nil
+end
+
+local function doLook(itemObj)
+  if not itemObj then return false end
+  if g_game and type(g_game.look) == "function" then
+    g_game.look(itemObj)
+    return true
+  end
+  if type(look) == "function" then
+    look(itemObj)
+    return true
+  end
+  return false
+end
+
+-- =========================================================
+-- LOOK PARSE / TIMERS
+-- =========================================================
+local function parseTimeToSeconds(text)
+  text = tostring(text or "")
+
+  local hh, mm = text:match("(%d+):(%d+)%s*[hH]")
+  if hh and mm then
+    return (tonumber(hh) or 0) * 3600 + (tonumber(mm) or 0) * 60
+  end
+
+  hh, mm = text:match("(%d+):(%d+)")
+  if hh and mm then
+    return (tonumber(hh) or 0) * 3600 + (tonumber(mm) or 0) * 60
+  end
+
+  local h2, m2 = text:match("(%d+)%s*[hH]%s*(%d+)%s*[mM]")
+  if h2 then
+    return (tonumber(h2) or 0) * 3600 + (tonumber(m2) or 0) * 60
+  end
+
+  local h3 = text:match("(%d+)%s*[hH]")
+  if h3 then
+    return (tonumber(h3) or 0) * 3600
+  end
+
+  return nil
+end
+
+local function parseImbuesFromLookText(text)
+  text = tostring(text or "")
+  local imbBlock = text:match("Imbuements:%s*%((.-)%)")
+  if not imbBlock or imbBlock == "" then return {} end
+
+  local out = {}
+
+  for part in imbBlock:gmatch("([^,]+)") do
+    part = trim(part)
+    if part ~= "" and not part:find("Free Slot", 1, true) then
+      local tier, rest = part:match("^(Basic)%s+(.+)$")
+      if not tier then tier, rest = part:match("^(Intricate)%s+(.+)$") end
+      if not tier then tier, rest = part:match("^(Powerful)%s+(.+)$") end
+
+      tier = trim(tier or "")
+      rest = trim(rest or part)
+
+      local timeToken = rest:match("(%d+:%d+%s*[hH])") or rest:match("(%d+%s*[hH]%s*%d+%s*[mM])")
+      local rawName = rest
+      if timeToken then
+        rawName = trim(rest:gsub(timeToken, ""))
+      end
+
+      local visual = LOOK_NAME_TO_VISUAL[rawName] or rawName
+      local sec = timeToken and parseTimeToSeconds(timeToken) or nil
+      local timeStr = "--:--"
+
+      if timeToken then
+        local hh, mm = timeToken:match("(%d+):(%d+)")
+        if hh and mm then
+          timeStr = string.format("%02d:%02d", tonumber(hh) or 0, tonumber(mm) or 0)
+        else
+          local h2, m2 = timeToken:match("(%d+)%s*[hH]%s*(%d+)%s*[mM]")
+          if h2 then
+            timeStr = string.format("%02d:%02d", tonumber(h2) or 0, tonumber(m2) or 0)
+          end
+        end
+      end
+
+      out[#out + 1] = {
+        tier = tier,
+        raw = rawName,
+        visual = visual,
+        seconds = sec,
+        timeStr = timeStr
+      }
+    end
+  end
+
+  return out
+end
+
+local function updateTimerFromLook(itemId, lookText)
+  local key = tostring(tonumber(itemId) or 0)
+  local detected = parseImbuesFromLookText(lookText)
+  local updatedNow = nowMs()
+
+  storage.autoImbuement = storage.autoImbuement or {}
+  storage.autoImbuement.timers = storage.autoImbuement.timers or {}
+
+  storage.autoImbuement.timers[key] = storage.autoImbuement.timers[key] or {}
+  storage.autoImbuement.timers[key].detected = detected
+  storage.autoImbuement.timers[key].updated = updatedNow
+
+  -- espelha também no storage antigo só por compatibilidade/debug
+  storage.imbuimentSystem = storage.imbuimentSystem or {}
+  storage.imbuimentSystem.timers = storage.imbuimentSystem.timers or {}
+  storage.imbuimentSystem.timers[key] = storage.imbuimentSystem.timers[key] or {}
+  storage.imbuimentSystem.timers[key].detected = detected
+  storage.imbuimentSystem.timers[key].updated = updatedNow
+
+  db.timers = storage.autoImbuement.timers
+
+  print(string.format("[Imb/Look] timer salvo item=%s, imbues=%d", key, #detected))
+end
+
+local function getDetectedImbueTimeByVisual(itemId, visualName)
+  local info = db.timers[itemTimerKey(itemId)]
+  if not info or type(info.detected) ~= "table" then return nil end
+
+  visualName = tostring(visualName or "")
+  for i = 1, #info.detected do
+    local d = info.detected[i]
+    if tostring(d.visual or "") == visualName then
+      return tonumber(d.seconds or 0) or 0
+    end
+  end
+
+  return nil
+end
+
+local function isRecentAction(itemId)
+  local t = tonumber(db.recentActions[itemTimerKey(itemId)] or 0) or 0
+  return t > 0 and (nowMs() - t) < RECENT_ACTION_MS
+end
+
+local function markRecentAction(itemId)
+  db.recentActions[itemTimerKey(itemId)] = nowMs()
+end
+
+-- =========================================================
+-- SHRINE / PORTABLE
+-- =========================================================
+local function findNearestShrine()
+  if not player or not player.getPosition then return nil, nil end
+  local playerPos = player:getPosition()
+  local bestShrine, bestDist, bestPos = nil, 99999, nil
+
+  for x = -7, 7 do
+    for y = -5, 5 do
+      local scanPos = {x = playerPos.x + x, y = playerPos.y + y, z = playerPos.z}
+      local tile = g_map.getTile(scanPos)
+      if tile then
+        local items = tile:getItems()
+        if items then
+          for _, item in ipairs(items) do
+            local itemId = item:getId()
+            for _, shrineId in ipairs(SHRINES) do
+              if itemId == shrineId then
+                local dist = getDistance(playerPos, scanPos)
+                if dist < bestDist then
+                  bestDist = dist
+                  bestShrine = item
+                  bestPos = scanPos
+                end
+                break
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  return bestShrine, bestPos
+end
+
+local function isNearShrine(shrine)
+  if not shrine or not shrine.getPosition or not player or not player.getPosition then return false end
+  local playerPos = player:getPosition()
+  local shrinePos = shrine:getPosition()
+  return getChebyshevDistance(playerPos, shrinePos) <= 1
+end
+
+local function ensureNearShrine(shrine)
+  if not shrine or not shrine.getPosition then return false end
+  if isNearShrine(shrine) then return true end
+
+  local playerPos = player:getPosition()
+  local shrinePos = shrine:getPosition()
+  local walkPos = getBestAdjacentShrinePos(shrinePos, playerPos)
+
+  if not walkPos then
+    print("[AutoImb] nao encontrei sqm livre ao lado da Shrine")
+    return false
+  end
+
+  if getDistance(playerPos, walkPos) > 0 then
+    autoWalk(walkPos, 20, {ignoreNonPathable = true, precision = 1})
+    print("[AutoImb] indo ate a Shrine")
+  end
+
+  return false
+end
+
+local function useThingWithSafe(a, b)
+  if type(useThingWith) == "function" then
+    return useThingWith(a, b)
+  end
+  if type(useWith) == "function" then
+    return useWith(a, b)
+  end
+  return false
+end
+
+local function openShrineOnItem(itemObj)
+  if not itemObj then return false end
+
+  if db.shrineMode == "portable" then
+    local portable = findItem and findItem(PORTABLE_SHRINE) or nil
+    if not portable then
+      print("[AutoImb] nao encontrei a Portable")
+      return false
+    end
+    print("[AutoImb] usando Portable Shrine no item")
+    return useThingWithSafe(portable, itemObj)
+  end
+
+  local shrine, shrinePos = findNearestShrine()
+  if not shrine then
+    print("[AutoImb] nao encontrei a Shrine")
+    return false
+  end
+
+  imbState.shrine = shrine
+  imbState.shrinePos = shrinePos
+
+  if not isNearShrine(shrine) then
+    ensureNearShrine(shrine)
+
+    later(1800, function()
+      if not imbState.active then return end
+      if not imbState.currentItem then return end
+      if not imbState.shrine then return end
+      if not isNearShrine(imbState.shrine) then return end
+
+      print("[AutoImb] chegou na Shrine, abrindo no item")
+      imbState.waitingWindow = true
+      imbState.lastAction = nowMs()
+      useThingWithSafe(imbState.shrine, imbState.currentItem)
+    end)
+
+    return true
+  end
+
+  print("[AutoImb] abrindo Shrine no item")
+  return useThingWithSafe(shrine, itemObj)
+end
+
+-- =========================================================
+-- IMB WINDOW MATCH
+-- =========================================================
+local function getTierFromEntryLevel(levelName)
+  return tierNameToNumber(levelName)
+end
+
 local function findImbueFromWindow(windowImbuements, visualName, tierNum)
-  if not windowImbuements then return nil end
+  if type(windowImbuements) ~= "table" then return nil end
+
   visualName = tostring(visualName or "")
   if visualName == "" then return nil end
 
   local groupInternal = IMBUE_VISUAL_TO_GROUP[visualName]
   if not groupInternal then
-    print("[Imb] Visual sem mapping: " .. visualName)
+    print("[AutoImb] Visual sem mapping: " .. visualName)
     return nil
   end
 
@@ -1292,143 +1778,294 @@ local function findImbueFromWindow(windowImbuements, visualName, tierNum)
 
   for i = 1, #windowImbuements do
     local imb = windowImbuements[i]
-    local g = tostring(imb.group or "")
-    local n = tostring(imb.name or "")
+    local groupName = tostring(imb.group or "")
+    local windowName = tostring(imb.name or "")
 
     local okGroup =
-      (g == shrineText) or
-      (n:find(shrineText, 1, true) ~= nil) or
-      (n:find(groupInternal, 1, true) ~= nil) or
-      (n:find(visualName, 1, true) ~= nil)
+      (groupName == shrineText) or
+      (windowName:find(shrineText, 1, true) ~= nil) or
+      (windowName:find(groupInternal, 1, true) ~= nil) or
+      (windowName:find(visualName, 1, true) ~= nil)
 
     if okGroup then
-      local t = getTierFromWindowName(n)
-      if t == tierNum then return imb end
+      local tier = getTierFromWindowName(windowName)
+      if tier == tierNum then
+        return imb
+      end
     end
   end
+
   return nil
 end
 
-local function activeName(activeSlots, slotIdx)
-  if not activeSlots then return "" end
-  local info = activeSlots[slotIdx]
-  if not info or not info[1] then return "" end
-  return tostring(info[1].name or "")
+local function tryClearImbuement(slotIdx)
+  slotIdx = tonumber(slotIdx) or 0
+
+  if g_game and type(g_game.clearImbuement) == "function" then
+    g_game.clearImbuement(slotIdx, true)
+    return true
+  end
+
+  if g_game and type(g_game.removeImbuement) == "function" then
+    g_game.removeImbuement(slotIdx, true)
+    return true
+  end
+
+  if g_game and type(g_game.clearImbuementSlot) == "function" then
+    g_game.clearImbuementSlot(slotIdx, true)
+    return true
+  end
+
+  if type(clearImbuement) == "function" then
+    clearImbuement(slotIdx, true)
+    return true
+  end
+
+  if type(removeImbuement) == "function" then
+    removeImbuement(slotIdx, true)
+    return true
+  end
+
+  print("[AutoImb] API de limpar imbuement nao encontrada")
+  return false
 end
 
-local imbState = {
-  active = false,
-  queue = {},
-  idx = 1,
-  waitingWindow = false,
-  waitingApply = false,
-  lastAction = 0,
-  shrine = nil,
-  shrinePos = nil,
-  currentEntry = nil
-}
+local function tryApplyImbuement(slotIdx, imbData)
+  if not imbData then return false end
 
+  if g_game and type(g_game.applyImbuement) == "function" then
+    g_game.applyImbuement(slotIdx, imbData.id, true)
+    return true
+  end
+
+  print("[AutoImb] API applyImbuement nao encontrada")
+  return false
+end
+
+local function buildActionsForEntry(entry, activeSlots, windowImbuements)
+  local actions = {}
+  local thresholdSec = (tonumber(db.limparMinutes or 0) or 0) * 60
+
+  for slotIdx = 0, entry.slots - 1 do
+    local cfg = entry.imbues[slotIdx + 1]
+    if cfg and trim(cfg.name) ~= "" then
+      local desiredVisual = canonImbueName(cfg.name)
+      local desiredTier = getTierFromEntryLevel(cfg.level)
+
+      local active = activeSlots and activeSlots[slotIdx] or nil
+      local shouldApply = false
+
+      if active then
+        local activeInfo = active[1]
+        local activeTime = tonumber(active[2] or 0) or 0
+        local activeName = canonImbueName(activeInfo and (activeInfo.group or activeInfo.name) or "")
+
+        if activeName == desiredVisual then
+          if activeTime <= thresholdSec then
+            actions[#actions + 1] = {
+              kind = "clear",
+              slotIdx = slotIdx,
+              visualName = desiredVisual
+            }
+            shouldApply = true
+          end
+        else
+          actions[#actions + 1] = {
+            kind = "clear",
+            slotIdx = slotIdx,
+            visualName = desiredVisual
+          }
+          shouldApply = true
+        end
+      else
+        shouldApply = true
+      end
+
+      if shouldApply then
+        local imbData = findImbueFromWindow(windowImbuements, desiredVisual, desiredTier)
+        if imbData then
+          actions[#actions + 1] = {
+            kind = "apply",
+            slotIdx = slotIdx,
+            visualName = desiredVisual,
+            imbData = imbData
+          }
+        else
+          print("[AutoImb] nao encontrei na janela: " .. desiredVisual .. " (" .. tostring(cfg.level) .. ")")
+        end
+      end
+    end
+  end
+
+  return actions
+end
+
+local function runActions(actions, onDone)
+  local idx = 1
+
+  local function nextAction()
+    if idx > #actions then
+      if onDone then onDone() end
+      return
+    end
+
+    local action = actions[idx]
+    idx = idx + 1
+
+    if action.kind == "clear" then
+      print("[AutoImb] limpando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
+      if not tryClearImbuement(action.slotIdx) then
+        later(500, nextAction)
+        return
+      end
+      later(1800, nextAction)
+      return
+    end
+
+    if action.kind == "apply" then
+      print("[AutoImb] aplicando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
+      if not tryApplyImbuement(action.slotIdx, action.imbData) then
+        later(500, nextAction)
+        return
+      end
+      later(2200, nextAction)
+      return
+    end
+
+    later(200, nextAction)
+  end
+
+  nextAction()
+end
+
+-- =========================================================
+-- RUNTIME QUEUE
+-- =========================================================
 local function resetImbState()
   imbState.active = false
   imbState.queue = {}
   imbState.idx = 1
   imbState.waitingWindow = false
   imbState.waitingApply = false
-  imbState.lastAction = 0
+  imbState.currentEntry = nil
+  imbState.currentItem = nil
+  imbState.currentItemSource = nil
   imbState.shrine = nil
   imbState.shrinePos = nil
-  imbState.currentEntry = nil
+  imbState.lastAction = 0
+  imbState.reopenAfterClear = false
 end
 
-local function buildQueueFromList()
+local function buildAutoImbueQueue()
   local q = {}
-  for i = 1, #st.list do
-    local e = st.list[i]
-    local itemId = tonumber(e.itemId) or 0
-    if itemId > 0 then
-      q[#q + 1] = { entry = e, itemId = itemId, typ = tostring(e.type or "") }
+
+  for i, entry in ipairs(db.entries or {}) do
+    entry = normalizeEntry(entry)
+    local itemObj, source = findItemObject(entry.itemId, entry.type, entry.slotKey)
+    if itemObj and itemObj.getId and itemObj:getId() == entry.itemId then
+      q[#q + 1] = {
+        entry = entry,
+        itemId = entry.itemId,
+        typ = entry.type,
+        slotKey = entry.slotKey,
+        itemObj = itemObj,
+        source = source
+      }
     end
   end
+
   return q
 end
 
-local function onWindow(itemId, slots, activeSlots, imbuements, needItems)
+
+function startImbueAllFromList()
+  CaveBot.setOff()
+  if db.enabled ~= true then
+    warn("[Imb] Ative o BotSwitch 'Imbuiments' para usar.")
+    return
+  end
+  if imbState.active then
+    warn("[Imb] Já está processando.")
+    return
+  end
+  if #db.entries == 0 then
+    warn("[Imb] Sua lista está vazia.")
+    return
+  end
+
+  local q = buildAutoImbueQueue()
+  if #q == 0 then
+    warn("[Imb] Nenhum item configurado foi encontrado.")
+    return
+  end
+
+  imbState.active = true
+  imbState.queue = q
+  imbState.idx = 1
+  imbState.waitingWindow = false
+  imbState.waitingApply = false
+  imbState.currentEntry = nil
+  imbState.currentItem = nil
+  imbState.currentItemSource = nil
+  imbState.shrine = nil
+  imbState.shrinePos = nil
+  imbState.lastAction = nowMs()
+  imbState.reopenAfterClear = false
+
+  print("[Imb] Iniciando processamento de " .. #q .. " item(ns).")
+end
+
+-- =========================================================
+-- WINDOW CALLBACK
+-- =========================================================
+local function onWindow(itemId, slots, activeSlots, windowImbuements, needItems)
   if not imbState.active then return end
-  if not imbState.waitingWindow then return end
+  if not imbState.currentEntry then return end
+
+  local entry = imbState.currentEntry
+  if tonumber(entry.itemId) ~= tonumber(itemId) then
+    return
+  end
 
   imbState.waitingWindow = false
   imbState.waitingApply = true
+  imbState.lastAction = nowMs()
 
-  local entry = imbState.currentEntry
-  if not entry then
+  local actions = buildActionsForEntry(entry, activeSlots or {}, windowImbuements or {})
+  
+  -- Se não há mais nenhuma ação na fila, o item está perfeitamente imbuido!
+  if #actions == 0 then
+    print("[AutoImb] Item " .. tostring(itemId) .. " 100% pronto!")
+    markRecentAction(itemId)
     imbState.waitingApply = false
-    schedule(250, function()
+    later(300, function()
       if g_game and g_game.closeImbuingWindow then g_game.closeImbuingWindow() end
     end)
     return
   end
 
-  local desired = entry.imbues or {}
-  local desiredSlots = tonumber(entry.slots) or 0
-  local realSlots = tonumber(slots) or 0
-  local max = math.min(desiredSlots, realSlots, #desired)
+  -- O SEGREDO ESTÁ AQUI: Pega APENAS a primeira ação e manda para o servidor.
+  -- Depois disso, aguarda o servidor responder com a janela atualizada!
+  local action = actions[1]
 
-  local toApply = {}
-
-  for slotIdx = 0, max - 1 do
-    local conf = desired[slotIdx + 1]
-    local visualName = tostring(conf and conf.name or "")
-    local tier = tierNameToNumber(tostring(conf and conf.level or "Powerful"))
-
-    if visualName ~= "" then
-      local hasActive = activeSlots and activeSlots[slotIdx] ~= nil
-      if hasActive then
-        local aName = activeName(activeSlots, slotIdx)
-        if aName ~= "" then
-          print('[Imb] NÃO vai aplicar no item '..tostring(itemId)..' (slot '..(slotIdx+1)..') porque ainda tem tempo ativo: "'..aName..'"')
-        else
-          print('[Imb] NÃO vai aplicar no item '..tostring(itemId)..' (slot '..(slotIdx+1)..') porque ainda tem tempo ativo (slot ocupado).')
-        end
-      else
-        local imbData = findImbueFromWindow(imbuements, visualName, tier)
-        if imbData then
-          toApply[#toApply + 1] = { slotIdx = slotIdx, imb = imbData }
-        else
-          print("[Imb] Não encontrado: " .. visualName .. " (" .. tostring(conf.level) .. ")")
-        end
-      end
-    end
+  if action.kind == "clear" then
+    print("[AutoImb] Limpando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
+    tryClearImbuement(action.slotIdx)
+  elseif action.kind == "apply" then
+    print("[AutoImb] Aplicando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
+    tryApplyImbuement(action.slotIdx, action.imbData)
   end
 
-  local applyIndex = 1
-  local function applyNext()
-    if applyIndex > #toApply then
-      imbState.waitingApply = false
-      schedule(800, function()
+  -- Timeout de segurança: Se o bot tentar aplicar e falhar (ex: falta de materiais na backpack),
+  -- o servidor do Tibia não vai atualizar a janela. Esse delay libera o bot para ir para o próximo item.
+  later(3500, function()
+    if imbState.active and imbState.waitingApply and imbState.currentEntry and imbState.currentEntry.itemId == itemId then
+        print("[AutoImb] Faltou material ou erro de timeout no servidor. Pulando...")
+        markRecentAction(itemId)
+        imbState.waitingApply = false
         if g_game and g_game.closeImbuingWindow then g_game.closeImbuingWindow() end
-      end)
-      return
     end
-
-    local data = toApply[applyIndex]
-    applyIndex = applyIndex + 1
-
-    if g_game and g_game.applyImbuement then
-      print('[Imb] Aplicando: slot '..(data.slotIdx+1)..' -> "'..tostring(data.imb.name or "")..'"')
-      g_game.applyImbuement(data.slotIdx, data.imb.id, true)
-    end
-
-    schedule(2200, applyNext)
-  end
-
-  if #toApply > 0 then
-    schedule(350, applyNext)
-  else
-    imbState.waitingApply = false
-    schedule(300, function()
-      if g_game and g_game.closeImbuingWindow then g_game.closeImbuingWindow() end
-    end)
-  end
+  end)
 end
 
 if type(onImbuementWindow) == "function" then
@@ -1437,38 +2074,22 @@ else
   print("[Imb] Aviso: onImbuementWindow não existe no seu client.")
 end
 
+-- =========================================================
+-- MAIN ENGINE
+-- =========================================================
 macro(200, function()
-  if st.enabled ~= true then return end
+  if db.enabled ~= true then return end
   if not imbState.active then return end
 
-  local t = nowMillis()
+  local t = nowMs()
   if t - (imbState.lastAction or 0) < 800 then return end
   if imbState.waitingWindow or imbState.waitingApply then return end
-
-  if not imbState.shrine or not imbState.shrinePos then
-    local shrine, sPos = findShrine()
-    if not shrine then
-      warn("[Imb] Shrine não encontrado no seu andar.")
-      resetImbState()
-      return
-    end
-
-    local pPos = player:getPosition()
-    local dist = math.max(math.abs(pPos.x - sPos.x), math.abs(pPos.y - sPos.y))
-    if dist > 1 then
-      warn("[Imb] Longe do shrine (dist " .. dist .. "). Chegue perto (<=1).")
-      resetImbState()
-      return
-    end
-
-    imbState.shrine = shrine
-    imbState.shrinePos = sPos
-  end
 
   if imbState.idx > #imbState.queue then
     print("[Imb] Finalizado: todos itens da lista processados.")
     resetImbState()
     destroyImbuingPanel()
+    CaveBot.setOn()
     return
   end
 
@@ -1476,7 +2097,7 @@ macro(200, function()
   imbState.idx = imbState.idx + 1
 
   local entry = data.entry
-  local itemObj = findItemObject(data.itemId, data.typ)
+  local itemObj, source = findItemObject(data.itemId, data.typ, data.slotKey)
 
   if not itemObj or not itemObj.getId or itemObj:getId() ~= data.itemId then
     print("[Imb] Item não encontrado agora: " .. data.itemId .. " (" .. tostring(data.typ) .. ")")
@@ -1484,56 +2105,271 @@ macro(200, function()
     return
   end
 
+  if isRecentAction(data.itemId) then
+    print("[Imb] item recentemente processado, pulando: " .. tostring(data.itemId))
+    imbState.lastAction = t
+    return
+  end
+
   imbState.currentEntry = entry
+  imbState.currentItem = itemObj
+  imbState.currentItemSource = source
   imbState.waitingWindow = true
   imbState.lastAction = t
 
   print("[Imb] Abrindo shrine no item: " .. tostring(data.itemId))
-  useWith(imbState.shrine, itemObj)
+  openShrineOnItem(itemObj)
 end)
 
-function startImbueAllFromList()
-  if st.enabled ~= true then
-    warn("[Imb] Ative o BotSwitch 'Imbuiments' para usar.")
-    return
-  end
-  if imbState.active then
-    warn("[Imb] Já está processando.")
-    return
-  end
-  if #st.list == 0 then
-    warn("[Imb] Sua lista está vazia.")
-    return
+-- =========================================================
+-- LOOK UPDATE TIMER
+-- =========================================================
+local lookState = {
+  waitingItemId = nil,
+  waitingTextUntil = 0,
+  queue = {},
+  idx = 1,
+  running = false
+}
+
+local function buildLookQueue()
+  local q = {}
+  local seen = {}
+
+  for i = 1, #db.entries do
+    local entry = normalizeEntry(db.entries[i])
+    if entry.itemId > 0 and not seen[entry.itemId] then
+      seen[entry.itemId] = true
+      q[#q + 1] = cloneTable(entry)
+    end
   end
 
-  imbState.queue = buildQueueFromList()
-  imbState.idx = 1
-  imbState.active = true
-  imbState.waitingWindow = false
-  imbState.waitingApply = false
-  imbState.shrine = nil
-  imbState.shrinePos = nil
-  imbState.currentEntry = nil
-  imbState.lastAction = nowMillis()
-
-  print("[Imb] Iniciando: " .. #imbState.queue .. " item(s) da lista.")
+  return q
 end
 
--- botão IMBUIR MANUAL (fora do painel, embaixo do switch)
-buttonImbuiment.ImbuirManual.onClick = function()
-  startImbueAllFromList()
+local function processLookQueue()
+  if lookState.running ~= true then return end
+  if lookState.waitingItemId then return end
+
+  if lookState.idx > #lookState.queue then
+    lookState.running = false
+    return
+  end
+
+  local entry = lookState.queue[lookState.idx]
+  lookState.idx = lookState.idx + 1
+
+  local itemObj = nil
+  itemObj = getInventoryItemBySlot(entry.slotKey)
+  if not itemObj or not itemObj.getId or itemObj:getId() ~= entry.itemId then
+    itemObj = findItemInContainers(entry.itemId)
+  end
+
+  if not itemObj then
+    later(150, processLookQueue)
+    return
+  end
+
+  lookState.waitingItemId = tonumber(entry.itemId)
+  lookState.waitingTextUntil = nowMs() + 3000
+
+  print("[Imb/Look] dando look no item " .. tostring(entry.itemId))
+
+  if not doLook(itemObj) then
+    lookState.waitingItemId = nil
+    later(120, processLookQueue)
+  end
 end
 
--- CaveBot action (use perto do shrine)
-function checkerImbuementsList()
-  if st.enabled ~= true then return true end
-  if imbState.active then return "retry" end
-  startImbueAllFromList()
-  return "retry"
+macro(10000, function()
+  if #db.entries == 0 then return end
+  if imbState.active then return end
+  if lookState.running then return end
+
+  lookState.queue = buildLookQueue()
+  lookState.idx = 1
+  lookState.running = true
+  lookState.waitingItemId = nil
+  processLookQueue()
+end)
+
+macro(200, function()
+  if not lookState.waitingItemId then return end
+  if nowMs() > (lookState.waitingTextUntil or 0) then
+    lookState.waitingItemId = nil
+    later(50, processLookQueue)
+  end
+end)
+
+-- =========================================================
+-- STATUS MESSAGE HOOK
+-- =========================================================
+botserver = botserver or { __callbacks = {} }
+
+if not onStatusMessage then
+  botserver.__callbacks.onStatusMessage = {}
+
+  onStatusMessage = function(callback)
+    table.insert(botserver.__callbacks.onStatusMessage, function(...)
+      callback(...)
+    end)
+
+    local cb = botserver.__callbacks.onStatusMessage[#botserver.__callbacks.onStatusMessage]
+    return {
+      remove = function()
+        for i, cb2 in ipairs(botserver.__callbacks.onStatusMessage) do
+          if cb == cb2 then
+            table.remove(botserver.__callbacks.onStatusMessage, i)
+            break
+          end
+        end
+      end
+    }
+  end
 end
 
--- inicial
-rebuildList()
-rebuildTimersUI()
+if modules and modules.game_textmessage and not botserver.__imbHookInstalled then
+  botserver.__imbHookInstalled = true
+  local oldStatus = modules.game_textmessage.displayStatusMessage
 
-UI.Separator()
+  modules.game_textmessage.displayStatusMessage = function(text, color)
+    if oldStatus then
+      oldStatus(text, color)
+    end
+
+    local callbacks = botserver.__callbacks.onStatusMessage or {}
+    for i = 1, #callbacks do
+      callbacks[i](text)
+    end
+  end
+end
+
+onTextMessage(function(mode, text)
+  if not lookState.waitingItemId then return end
+  if type(text) ~= "string" then return end
+  if not text:find("Imbuements:", 1, true) then return end
+
+  print("[Imb/Look] CAPTURADO VIA onTextMessage -> item " .. tostring(lookState.waitingItemId))
+  print("[Imb/Look] texto: " .. text)
+
+  updateTimerFromLook(lookState.waitingItemId, text)
+  lookState.waitingItemId = nil
+
+  later(80, processLookQueue)
+end)
+
+function cavebotCheckImbueByLook()
+  local db = storage.autoImbuement or {}
+
+  if db.enabled ~= true then
+    return "Hunt"
+  end
+
+  if type(db.entries) ~= "table" or #db.entries == 0 then
+    return "Hunt"
+  end
+
+  if type(db.timers) ~= "table" then
+    return "retry"
+  end
+
+  local thresholdSec = (tonumber(db.limparMinutes or 0) or 0) * 60
+
+  local LOOK_NAME_TO_VISUAL = {
+    ["Void"] = "Mana Leech",
+    ["Vampirism"] = "Life Leech",
+    ["Strike"] = "Critical",
+    ["Epiphany"] = "Magic Level",
+    ["Precision"] = "Skill Boost",
+    ["Chop"] = "Skill Boost",
+    ["Slash"] = "Skill Boost",
+    ["Bash"] = "Skill Boost",
+    ["Dragon Hide"] = "Fire Protection",
+    ["Quara Scale"] = "Ice Protection",
+    ["Snake Skin"] = "Earth Protection",
+    ["Cloud Fabric"] = "Energy Protection",
+    ["Lich Shroud"] = "Death Protection",
+    ["Demon Presence"] = "Holy Protection",
+    ["Featherweight"] = "Capacity",
+    ["Swiftness"] = "Speed"
+  }
+
+  local function trim(s)
+    return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+  end
+
+  local function canonImbueName(name)
+    name = trim(name)
+    if name == "" then return "" end
+
+    if name == "Hit Points Leech" then return "Life Leech" end
+    if name == "Mana Leech" then return "Mana Leech" end
+    if name == "Critical" then return "Critical" end
+    if name == "Magic Level" then return "Magic Level" end
+
+    if name == "Skillboost (Distance)" or name == "Skillboost (Sword)" or name == "Skillboost (Club)" or name == "Skillboost (Axe)" then
+      return "Skill Boost"
+    end
+
+    if name == "Elemental Protection (Fire)" then return "Fire Protection" end
+    if name == "Elemental Protection (Ice)" then return "Ice Protection" end
+    if name == "Elemental Protection (Earth)" then return "Earth Protection" end
+    if name == "Elemental Protection (Energy)" then return "Energy Protection" end
+    if name == "Elemental Protection (Death)" then return "Death Protection" end
+    if name == "Elemental Protection (Holy)" then return "Holy Protection" end
+
+    return LOOK_NAME_TO_VISUAL[name] or name
+  end
+
+  for i = 1, #db.entries do
+    local entry = db.entries[i]
+    local itemId = tonumber(entry.itemId or 0) or 0
+    local slots = tonumber(entry.slots or 1) or 1
+    local imbues = entry.imbues or {}
+
+    if itemId > 0 then
+      local info = db.timers[tostring(itemId)]
+
+      -- ainda não recebeu look desse item
+      if not info or type(info.detected) ~= "table" then
+        print("[Imb/Cavebot] sem leitura ainda: item " .. itemId)
+        return "retry"
+      end
+
+      for slot = 1, slots do
+        local cfg = imbues[slot]
+        if cfg and trim(cfg.name) ~= "" then
+          local wanted = canonImbueName(cfg.name)
+          local found = nil
+
+          for j = 1, #info.detected do
+            local d = info.detected[j]
+            if tostring(d.visual or "") == wanted then
+              found = d
+              break
+            end
+          end
+
+          if not found then
+            print("[Imb/Cavebot] imbue ausente: item " .. itemId .. " / " .. wanted)
+            return "REFRESH"
+          end
+
+          local sec = tonumber(found.seconds or 0) or 0
+          if sec <= thresholdSec then
+            print("[Imb/Cavebot] tempo baixo: item " .. itemId .. " / " .. wanted .. " / " .. sec .. "s <= " .. thresholdSec .. "s")
+            return "REFRESH"
+          end
+        end
+      end
+    end
+  end
+
+  print("[Imb/Cavebot] tudo ok -> Hunt")
+  return "Hunt"
+end
+-- =========================================================
+-- AUTO START / INIT
+-- =========================================================
+panel:hide()
+manager:hide()
