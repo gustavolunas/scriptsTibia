@@ -2181,7 +2181,7 @@ local function processLookQueue()
   end
 end
 
-macro(10000, function()
+macro(30000, function()
   if #db.entries == 0 then return end
   if imbState.active then return end
   if lookState.running then return end
