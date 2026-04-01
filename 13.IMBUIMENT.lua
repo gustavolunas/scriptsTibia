@@ -1,5 +1,4 @@
 setDefaultTab("Tools")
-modules.game_textmessage.displayGameMessage("SISTEMA DE IMBUE ATUALIZADO, RECONFIGURE OS ITENS DENTRO DO PAINEL.")
 
 local panelImbuiment = setupUI([[
 MainWindow
@@ -1627,8 +1626,23 @@ local function getDetectedImbueTimeByVisual(itemId, visualName)
 end
 
 local function isRecentAction(itemId)
-  local t = tonumber(db.recentActions[itemTimerKey(itemId)] or 0) or 0
-  return t > 0 and (nowMs() - t) < RECENT_ACTION_MS
+  local key = itemTimerKey(itemId)
+  local t = tonumber(db.recentActions[key] or 0) or 0
+  if t <= 0 then return false end
+
+  local diff = nowMs() - t
+
+  if diff < 0 then
+    db.recentActions[key] = nil
+    return false
+  end
+
+  if diff >= RECENT_ACTION_MS then
+    db.recentActions[key] = nil
+    return false
+  end
+
+  return true
 end
 
 local function markRecentAction(itemId)
@@ -2107,6 +2121,8 @@ macro(200, function()
 
   if isRecentAction(data.itemId) then
     print("[Imb] item recentemente processado, pulando: " .. tostring(data.itemId))
+    db.recentActions[itemTimerKey(data.itemId)] = nil
+    imbState.idx = imbState.idx + 1
     imbState.lastAction = t
     return
   end
@@ -2181,7 +2197,7 @@ local function processLookQueue()
   end
 end
 
-macro(30000, function()
+macro(25000, function()
   if #db.entries == 0 then return end
   if imbState.active then return end
   if lookState.running then return end
@@ -2373,4 +2389,3 @@ end
 -- =========================================================
 panel:hide()
 manager:hide()
-UI.Separator()
