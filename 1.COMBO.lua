@@ -2357,8 +2357,10 @@ macro(100, function()
   if not storage[switchCombo].enabled then return end
   if not cfg.main.enabled then return end
   if now < combatGlobalUntil then return end
-  local comboPause = storage.lnsLeaderCombo and storage.lnsLeaderCombo.pauseUntil or 0
-  if comboPause > now then return end
+  local comboPauseUntil = ((storage.lnsLeaderCombo and storage.lnsLeaderCombo.pauseUntil) or 0)
+  if comboPauseUntil > now then
+    return
+  end
 
   local player = g_game.getLocalPlayer()
   local target = g_game.getAttackingCreature()
