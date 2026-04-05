@@ -30,6 +30,7 @@ local macros = {
 
   "14.INGAME",
   "9.TRAVEL",
+  "10.01.FOLLOW",
   "10.FOLLOW",
   "11.PARTY",
   "12.PREY",
