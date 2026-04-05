@@ -1,4 +1,5 @@
 setDefaultTab("LNS")
+print("bmarket atualizado")
 
 storage = storage or {}
 
@@ -219,7 +220,8 @@ end
 
 local function canStand(pos)
   local tile = g_map.getTile(pos)
-  if not tile or hasOtherPlayer(tile) then return false end
+  -- Apagamos a checagem de outros players aqui:
+  if not tile then return false end 
   if posEq(player:getPosition(), pos) then return true end
   if tile.isWalkable then
     local ok, v = pcall(function() return tile:isWalkable() end)
