@@ -293,7 +293,9 @@ local function getComboDb()
     active = false,
     kind = "",
     targetId = 0,
-    spell = ""
+    spell = "",
+    castTries = 0,
+    startedAt = 0
   }
   return storage[COMBO_STORAGE_KEY]
 end
@@ -305,6 +307,8 @@ local function clearComboState(token)
   db.kind = ""
   db.targetId = 0
   db.spell = ""
+  db.castTries = 0
+  db.startedAt = 0
 end
 
 local function startComboCommon(kind)
@@ -313,12 +317,14 @@ local function startComboCommon(kind)
     return nil
   end
 
-  db.pauseUntil = now + 3000
+  db.pauseUntil = now + 3600
   db.token = (tonumber(db.token) or 0) + 1
   db.active = true
   db.kind = kind or ""
   db.targetId = 0
   db.spell = ""
+  db.castTries = 0
+  db.startedAt = now
   return db.token
 end
 
@@ -342,11 +348,22 @@ local function triggerComboUE()
 
   local db = getComboDb()
   db.spell = ueSpell
+  db.castTries = 0
+  db.startedAt = now
 
-  schedule(2500, function()
+  local firstDelay = 2450
+  local retryDelay = 160
+  local maxTries = 4
+  local hardTimeout = now + 3400
+
+  local function tryCastUE()
     local comboDb = getComboDb()
     if comboDb.token ~= token then return end
     if comboDb.kind ~= "ue" then return end
+    if now > hardTimeout then
+      clearComboState(token)
+      return
+    end
 
     local currentPanelDb = getPanelDb()
     local currentEnabled = currentPanelDb.switches.useUEcheck == true
@@ -362,11 +379,30 @@ local function triggerComboUE()
       return
     end
 
+    comboDb.castTries = (tonumber(comboDb.castTries) or 0) + 1
     say(spellToCast)
-    clearComboState(token)
+
+    if comboDb.castTries >= maxTries then
+      clearComboState(token)
+      return
+    end
+
+    schedule(retryDelay, function()
+      local checkDb = getComboDb()
+      if checkDb.token ~= token then return end
+      if checkDb.kind ~= "ue" then return end
+      tryCastUE()
+    end)
+  end
+
+  schedule(firstDelay, function()
+    local comboDb = getComboDb()
+    if comboDb.token ~= token then return end
+    if comboDb.kind ~= "ue" then return end
+    tryCastUE()
   end)
 
-  schedule(3100, function()
+  schedule(3600, function()
     clearComboState(token)
   end)
 
@@ -390,11 +426,22 @@ local function triggerComboSD()
 
   local db = getComboDb()
   db.targetId = currentTarget:getId()
+  db.castTries = 0
+  db.startedAt = now
 
-  schedule(2500, function()
+  local firstDelay = 2450
+  local retryDelay = 140
+  local maxTries = 4
+  local hardTimeout = now + 3400
+
+  local function tryCastSD()
     local comboDb = getComboDb()
     if comboDb.token ~= token then return end
     if comboDb.kind ~= "sd" then return end
+    if now > hardTimeout then
+      clearComboState(token)
+      return
+    end
 
     if not findItem(SD_RUNE_ID) then
       clearComboState(token)
@@ -402,6 +449,7 @@ local function triggerComboSD()
     end
 
     local target = nil
+
     if comboDb.targetId and comboDb.targetId > 0 then
       target = getCreatureById(comboDb.targetId)
     end
@@ -415,11 +463,30 @@ local function triggerComboSD()
       return
     end
 
+    comboDb.castTries = (tonumber(comboDb.castTries) or 0) + 1
     useWith(SD_RUNE_ID, target)
-    clearComboState(token)
+
+    if comboDb.castTries >= maxTries then
+      clearComboState(token)
+      return
+    end
+
+    schedule(retryDelay, function()
+      local checkDb = getComboDb()
+      if checkDb.token ~= token then return end
+      if checkDb.kind ~= "sd" then return end
+      tryCastSD()
+    end)
+  end
+
+  schedule(firstDelay, function()
+    local comboDb = getComboDb()
+    if comboDb.token ~= token then return end
+    if comboDb.kind ~= "sd" then return end
+    tryCastSD()
   end)
 
-  schedule(3100, function()
+  schedule(3600, function()
     clearComboState(token)
   end)
 
@@ -574,7 +641,7 @@ end
 onTalk(function(name, level, mode, text, channelId, pos)
   if channelId ~= 1 then return end
 
-  local leaderName = getLeaderName()
+  local leaderName = lowerText(getPanelDb().texts.navAttack or "")
   if leaderName == "" then return end
   if lowerText(name) ~= leaderName then return end
 
