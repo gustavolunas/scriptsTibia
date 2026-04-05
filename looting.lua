@@ -1,4 +1,5 @@
 setDefaultTab("Target")
+
 print("target atualizado v2")
 
 TargetBot.Looting = {}
