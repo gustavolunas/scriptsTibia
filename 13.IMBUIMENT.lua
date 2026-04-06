@@ -1606,8 +1606,6 @@ local function updateTimerFromLook(itemId, lookText)
   storage.imbuimentSystem.timers[key].updated = updatedNow
 
   db.timers = storage.autoImbuement.timers
-
-  print(string.format("[Imb/Look] timer salvo item=%s, imbues=%d", key, #detected))
 end
 
 local function getDetectedImbueTimeByVisual(itemId, visualName)
@@ -1702,13 +1700,11 @@ local function ensureNearShrine(shrine)
   local walkPos = getBestAdjacentShrinePos(shrinePos, playerPos)
 
   if not walkPos then
-    print("[AutoImb] nao encontrei sqm livre ao lado da Shrine")
     return false
   end
 
   if getDistance(playerPos, walkPos) > 0 then
     autoWalk(walkPos, 20, {ignoreNonPathable = true, precision = 1})
-    print("[AutoImb] indo ate a Shrine")
   end
 
   return false
@@ -1730,16 +1726,13 @@ local function openShrineOnItem(itemObj)
   if db.shrineMode == "portable" then
     local portable = findItem and findItem(PORTABLE_SHRINE) or nil
     if not portable then
-      print("[AutoImb] nao encontrei a Portable")
       return false
     end
-    print("[AutoImb] usando Portable Shrine no item")
     return useThingWithSafe(portable, itemObj)
   end
 
   local shrine, shrinePos = findNearestShrine()
   if not shrine then
-    print("[AutoImb] nao encontrei a Shrine")
     return false
   end
 
@@ -1755,7 +1748,6 @@ local function openShrineOnItem(itemObj)
       if not imbState.shrine then return end
       if not isNearShrine(imbState.shrine) then return end
 
-      print("[AutoImb] chegou na Shrine, abrindo no item")
       imbState.waitingWindow = true
       imbState.lastAction = nowMs()
       useThingWithSafe(imbState.shrine, imbState.currentItem)
@@ -1764,7 +1756,6 @@ local function openShrineOnItem(itemObj)
     return true
   end
 
-  print("[AutoImb] abrindo Shrine no item")
   return useThingWithSafe(shrine, itemObj)
 end
 
@@ -1783,7 +1774,6 @@ local function findImbueFromWindow(windowImbuements, visualName, tierNum)
 
   local groupInternal = IMBUE_VISUAL_TO_GROUP[visualName]
   if not groupInternal then
-    print("[AutoImb] Visual sem mapping: " .. visualName)
     return nil
   end
 
@@ -1840,7 +1830,6 @@ local function tryClearImbuement(slotIdx)
     return true
   end
 
-  print("[AutoImb] API de limpar imbuement nao encontrada")
   return false
 end
 
@@ -1852,7 +1841,6 @@ local function tryApplyImbuement(slotIdx, imbData)
     return true
   end
 
-  print("[AutoImb] API applyImbuement nao encontrada")
   return false
 end
 
@@ -1905,7 +1893,6 @@ local function buildActionsForEntry(entry, activeSlots, windowImbuements)
             imbData = imbData
           }
         else
-          print("[AutoImb] nao encontrei na janela: " .. desiredVisual .. " (" .. tostring(cfg.level) .. ")")
         end
       end
     end
@@ -1927,7 +1914,6 @@ local function runActions(actions, onDone)
     idx = idx + 1
 
     if action.kind == "clear" then
-      print("[AutoImb] limpando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
       if not tryClearImbuement(action.slotIdx) then
         later(500, nextAction)
         return
@@ -1937,7 +1923,6 @@ local function runActions(actions, onDone)
     end
 
     if action.kind == "apply" then
-      print("[AutoImb] aplicando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
       if not tryApplyImbuement(action.slotIdx, action.imbData) then
         later(500, nextAction)
         return
@@ -2026,7 +2011,6 @@ function startImbueAllFromList()
   imbState.lastAction = nowMs()
   imbState.reopenAfterClear = false
 
-  print("[Imb] Iniciando processamento de " .. #q .. " item(ns).")
 end
 
 -- =========================================================
@@ -2063,10 +2047,8 @@ local function onWindow(itemId, slots, activeSlots, windowImbuements, needItems)
   local action = actions[1]
 
   if action.kind == "clear" then
-    print("[AutoImb] Limpando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
     tryClearImbuement(action.slotIdx)
   elseif action.kind == "apply" then
-    print("[AutoImb] Aplicando slot " .. (action.slotIdx + 1) .. " -> " .. tostring(action.visualName))
     tryApplyImbuement(action.slotIdx, action.imbData)
   end
 
@@ -2074,7 +2056,6 @@ local function onWindow(itemId, slots, activeSlots, windowImbuements, needItems)
   -- o servidor do Tibia não vai atualizar a janela. Esse delay libera o bot para ir para o próximo item.
   later(3500, function()
     if imbState.active and imbState.waitingApply and imbState.currentEntry and imbState.currentEntry.itemId == itemId then
-        print("[AutoImb] Faltou material ou erro de timeout no servidor. Pulando...")
         markRecentAction(itemId)
         imbState.waitingApply = false
         if g_game and g_game.closeImbuingWindow then g_game.closeImbuingWindow() end
@@ -2085,7 +2066,6 @@ end
 if type(onImbuementWindow) == "function" then
   onImbuementWindow(onWindow)
 else
-  print("[Imb] Aviso: onImbuementWindow não existe no seu client.")
 end
 
 -- =========================================================
@@ -2100,7 +2080,6 @@ macro(200, function()
   if imbState.waitingWindow or imbState.waitingApply then return end
 
   if imbState.idx > #imbState.queue then
-    print("[Imb] Finalizado: todos itens da lista processados.")
     resetImbState()
     destroyImbuingPanel()
     CaveBot.setOn()
@@ -2114,13 +2093,11 @@ macro(200, function()
   local itemObj, source = findItemObject(data.itemId, data.typ, data.slotKey)
 
   if not itemObj or not itemObj.getId or itemObj:getId() ~= data.itemId then
-    print("[Imb] Item não encontrado agora: " .. data.itemId .. " (" .. tostring(data.typ) .. ")")
     imbState.lastAction = t
     return
   end
 
   if isRecentAction(data.itemId) then
-    print("[Imb] item recentemente processado, pulando: " .. tostring(data.itemId))
     db.recentActions[itemTimerKey(data.itemId)] = nil
     imbState.idx = imbState.idx + 1
     imbState.lastAction = t
@@ -2132,8 +2109,7 @@ macro(200, function()
   imbState.currentItemSource = source
   imbState.waitingWindow = true
   imbState.lastAction = t
-
-  print("[Imb] Abrindo shrine no item: " .. tostring(data.itemId))
+    
   openShrineOnItem(itemObj)
 end)
 
@@ -2188,8 +2164,6 @@ local function processLookQueue()
 
   lookState.waitingItemId = tonumber(entry.itemId)
   lookState.waitingTextUntil = nowMs() + 3000
-
-  print("[Imb/Look] dando look no item " .. tostring(entry.itemId))
 
   if not doLook(itemObj) then
     lookState.waitingItemId = nil
@@ -2264,9 +2238,6 @@ onTextMessage(function(mode, text)
   if not lookState.waitingItemId then return end
   if type(text) ~= "string" then return end
   if not text:find("Imbuements:", 1, true) then return end
-
-  print("[Imb/Look] CAPTURADO VIA onTextMessage -> item " .. tostring(lookState.waitingItemId))
-  print("[Imb/Look] texto: " .. text)
 
   updateTimerFromLook(lookState.waitingItemId, text)
   lookState.waitingItemId = nil
@@ -2348,7 +2319,6 @@ function cavebotCheckImbueByLook()
 
       -- ainda não recebeu look desse item
       if not info or type(info.detected) ~= "table" then
-        print("[Imb/Cavebot] sem leitura ainda: item " .. itemId)
         return "retry"
       end
 
@@ -2367,7 +2337,6 @@ function cavebotCheckImbueByLook()
           end
 
           if not found then
-            print("[Imb/Cavebot] imbue ausente: item " .. itemId .. " / " .. wanted)
             return "REFRESH"
           end
 
@@ -2381,7 +2350,6 @@ function cavebotCheckImbueByLook()
     end
   end
 
-  print("[Imb/Cavebot] tudo ok -> Hunt")
   return "Hunt"
 end
 -- =========================================================
