@@ -963,6 +963,9 @@ local function doNpcTravel(npcName, city)
   schedule(250, function()
     if not isNpcNear(nameCopy, 3) then lockTravel = false return end
     NPC.say(cityCopy)
+    if (player:isPartyMember() or player:isPartyLeader() or player:getShield() > 2) then 
+      sayChannel(1, "Travel to: " .. cityCopy)
+    end
   end)
 
   schedule(500, function()
