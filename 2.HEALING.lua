@@ -595,7 +595,7 @@ macro(1000, function()
     return
   end
 
-  if lastAutoFoodTry + 30000 > now then
+  if lastAutoFoodTry + 1000 > now then
     return
   end
   lastAutoFoodTry = now
