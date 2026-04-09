@@ -504,7 +504,7 @@ macro(1000, function()
   end
 end)
 
-macro(500, function()
+macro(20, function()
   if storage.utilityToggles["transformCoin"] ~= true then return end
   if not storage.transformarCoin[1] then return end
   local containers = g_game.getContainers()
