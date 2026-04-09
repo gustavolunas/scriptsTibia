@@ -200,7 +200,7 @@ BotHealingPotMP < Panel
 
 UIWindow
   id: mainPanel
-  size: 400 390
+  size: 400 420
   border: 1 black
   anchors.centerIn: parent
   margin-top: -60
@@ -433,7 +433,7 @@ UIWindow
     margin-top: 25
     margin-right: 8
     margin-left: 8
-    height: 55
+    height: 80
     image-color: #363636
     layout: verticalBox
 
@@ -472,7 +472,7 @@ UIWindow
     anchors.top: labelFood.bottom
     anchors.left: panelFood.left
     anchors.right: panelFood.right
-    size: 270 35
+    size: 270 74
     margin-top: 5
     margin-left: 5
     margin-right: 5
