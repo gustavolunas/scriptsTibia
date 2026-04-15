@@ -1328,18 +1328,7 @@ function checkerImbuementsList()
   return "retry"
 end
 
-local imbIcon = addIcon("imbI", {
-  item = 14513,
-  text = "M.Imbue",
-  switchable = false,
-  moveable = true,
-}, function()
-  startImbueAllFromList(true)
-end)
-
-imbIcon:setSize({height = 57, width = 54})
-imbIcon.text:setFont('verdana-11px-rounded')
-imbIcon.item:setSize('35 35')
+-- icone aquiiiii
 
 if refs.limpar then
   if refs.limpar.setMinimum then refs.limpar:setMinimum(1) end
