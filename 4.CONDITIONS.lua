@@ -235,6 +235,8 @@ UIWindow
       self:addOption("Utito Tempo")
       self:addOption("Utamo Tempo")
       self:addOption("Utito Tempo San")
+      self:addOption("Utito Virtu")
+      self:addOption("Utori Virtu")
 
   Panel
     id: rowAntiLyze
