@@ -1,7 +1,4 @@
 setDefaultTab("Tools")
-
-
-
 switchTravel = "travelButton"
 
 storage[switchTravel] = storage[switchTravel] or { enabled = false }
