@@ -1,4 +1,5 @@
 setDefaultTab("Tools")
+print("...")
 switchTravel = "travelButton"
 
 storage[switchTravel] = storage[switchTravel] or { enabled = false }
