@@ -62,7 +62,8 @@ storage[STKEY] = storage[STKEY] or {
   }
 }
 local st = storage[STKEY]
-st.npcs = {
+
+local defaultNpcs = {
   ["Captain Bluebear"] = { cities = { "Carlin", "Ab'dendriel", "Edron", "Venore", "Port Hope", "Liberty Bay", "Yalahar", "Roshamuul", "Krailos", "Oramond", "Rangiroa", "Svargrond", "Arcadia" } },
   ["Captain Fearless"] = { cities = { "Thais", "Carlin", "Ab'dendriel", "Port Hope", "Edron", "Darashia", "Liberty Bay", "Svargrond", "Yalahar", "Gray Island", "Ankrahmun", "Issavi", "Arcadia", "Rangiroa" } },
   ["Captain Greyhound"] = { cities = { "Thais", "Ab'dendriel", "Venore", "Svargrond", "Yalahar", "Rangiroa", "Arcadia", "Edron" } },
@@ -96,6 +97,30 @@ st.npcs = {
   ["Captain Jack Rat"] = { cities = { "Sail", "Safe" } },
   ["Harlow"] = { cities = { "Yalahar", "Vengoth" } },
 }
+
+st.npcs = st.npcs or {}
+
+for npcName, data in pairs(defaultNpcs) do
+  if not st.npcs[npcName] then
+    st.npcs[npcName] = { cities = {} }
+  end
+
+  st.npcs[npcName].cities = st.npcs[npcName].cities or {}
+
+  for _, cityName in ipairs(data.cities or {}) do
+    local exists = false
+    for _, savedCity in ipairs(st.npcs[npcName].cities) do
+      if normalizeText(savedCity) == normalizeText(cityName) then
+        exists = true
+        break
+      end
+    end
+
+    if not exists then
+      table.insert(st.npcs[npcName].cities, cityName)
+    end
+  end
+end
 
 local function trim(s)
   return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
