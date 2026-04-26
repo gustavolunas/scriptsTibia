@@ -1,4 +1,5 @@
 setDefaultTab("Tools")
+print("btf att")
 
 PANEL_NAME = "lnsFollow"
 SWITCH_FOLLOW = "followButton"
