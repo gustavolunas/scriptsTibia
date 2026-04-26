@@ -1,7 +1,7 @@
 setDefaultTab("Tools")
 
-local PANEL_NAME = "lnsFollow"
-local SWITCH_FOLLOW = "followButton"
+PANEL_NAME = "lnsFollow"
+SWITCH_FOLLOW = "followButton"
 
 local function trim(str)
   str = tostring(str or "")
@@ -558,7 +558,7 @@ local function runFollowLogicAttacking()
   return followVisibleLeaderWhileAttacking(c)
 end
 
-local followButton = setupUI([[
+followButton = setupUI([[
 Panel
   height: 35
 
