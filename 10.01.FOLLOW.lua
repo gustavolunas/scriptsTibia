@@ -936,3 +936,20 @@ butCancelAtk:setHeight(22)
 butCancelAtk:setMarginTop(1)
 butCancelAtk:setFont("verdana-11px-rounded")
 butCancelAtk:setColor("white")
+
+local function sanitizeLeaderComboStorage()
+  storage.lnsLeaderCombo = storage.lnsLeaderCombo or {}
+
+  local old = storage.lnsLeaderCombo
+
+  storage.lnsLeaderCombo = {
+    active = false,
+    kind = tostring(old.kind or ""),
+    targetId = 0,
+    spell = tostring(old.spell or ""),
+    token = tonumber(old.token) or 0,
+    pauseUntil = 0
+  }
+end
+
+sanitizeLeaderComboStorage()
