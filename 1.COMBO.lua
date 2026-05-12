@@ -1,4 +1,5 @@
 setDefaultTab("LNS")
+print("atkbot att")
 
 local switchCombo = "comboButton"
 
