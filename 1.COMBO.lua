@@ -1611,13 +1611,19 @@ updateSpellPanelLabels()
 updateRunePanelLabels()
 refreshList()
 
+local combatGlobalUntil = 0
+
 local function resetRuntimeCooldowns()
   if cfg and cfg.actions then
     for _, a in ipairs(cfg.actions) do
       a.nextCast = 0
+      a.lastCast = 0
+      a.cooldownUntil = 0
     end
   end
+
   userRune = 0
+  combatGlobalUntil = 0
 end
 
 resetRuntimeCooldowns()
@@ -2133,8 +2139,6 @@ end)
 -- =========================================================
 -- 1. DETECTOR DE MAGIAS (PRECISÃO EXATA)
 -- =========================================================
-local combatGlobalUntil = 0
-
 local COMBAT_GLOBAL_DELAY = 1000
 local worldName = g_game.getWorldName() or ""
 
@@ -2428,10 +2432,16 @@ macro(100, function()
           if rid > 0 then
             if (not userRune or userRune <= now) then
               useWith(rid, target)
-              delay(1000)
-              action.nextCast = now + SPAM_DELAY
+        
+              local cd = tonumber(action.cd) or RUNE_WORLD_COOLDOWN or 1000
+              if cd <= 0 then cd = RUNE_WORLD_COOLDOWN or 1000 end
+        
+              userRune = now + cd
+              action.nextCast = now + cd
+              combatGlobalUntil = now + COMBAT_GLOBAL_DELAY
+        
+              return
             end
-            return
           end
         end
       end
